@@ -79,9 +79,19 @@ def health() -> dict:
     return {"ok": True, "agent": agent.status()}
 
 
+@app.get("//health", include_in_schema=False)
+def health_double_slash() -> dict:
+    return health()
+
+
 @app.get("/run-once")
 def run_once_get() -> dict:
     return agent.run_once(notify=True).model_dump(mode="json")
+
+
+@app.get("//run-once", include_in_schema=False)
+def run_once_get_double_slash() -> dict:
+    return run_once_get()
 
 
 @app.post("/run-once")
@@ -89,9 +99,19 @@ def run_once_post() -> dict:
     return agent.run_once(notify=True).model_dump(mode="json")
 
 
+@app.post("//run-once", include_in_schema=False)
+def run_once_post_double_slash() -> dict:
+    return run_once_post()
+
+
 @app.post("/mcp")
 def mcp(request: dict) -> dict:
     return handle_mcp(agent, request)
+
+
+@app.post("//mcp", include_in_schema=False)
+def mcp_double_slash(request: dict) -> dict:
+    return mcp(request)
 
 
 def run() -> None:
