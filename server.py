@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse
 from agent import SelfHealingAgent
 from config import load_settings
 from mcp_http import handle_mcp
+from playbooks import list_capabilities
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 log = logging.getLogger(__name__)
@@ -123,6 +124,25 @@ def _report_html(report: dict) -> str:
     """
 
 
+def _capabilities_html() -> str:
+    cards = []
+    for capability in list_capabilities():
+        triggers = "".join(f"<li><code>{escape(str(trigger))}</code></li>" for trigger in capability.get("triggers", []))
+        cards.append(f"""
+        <section class="panel">
+          <h2>{escape(str(capability.get("title", "")))}</h2>
+          <p><span class="badge ok">{escape(str(capability.get("kind", "")))}</span></p>
+          <div class="grid">
+            <div class="metric"><div class="label">Cosa rileva</div><ul>{triggers}</ul></div>
+            <div class="metric"><div class="label">Cosa fa</div><p>{escape(str(capability.get("action", "")))}</p></div>
+            <div class="metric"><div class="label">Sicurezza</div><p>{escape(str(capability.get("safety", "")))}</p></div>
+            <div class="metric"><div class="label">Come migliorarlo</div><p>{escape(str(capability.get("improvement_hint", "")))}</p></div>
+          </div>
+        </section>
+        """)
+    return "".join(cards)
+
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
     status = agent.status()
@@ -136,7 +156,7 @@ def index() -> str:
         </div>
       </div>
       {_status_metrics(status)}
-      <p><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="health">Stato agente</a><a class="button secondary" href="history">Storico</a></p>
+      <p><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="health">Stato agente</a><a class="button secondary" href="history">Storico</a><a class="button secondary" href="capabilities">Capacita'</a></p>
       <section class="panel">
         <h2>Ultimo report</h2>
         <p>{escape(str(summary))}</p>
@@ -160,7 +180,7 @@ def health_page() -> str:
     raw = {"ok": True, "agent": status}
     return _page("Stato agente", f"""
       <h1>Stato agente</h1>
-      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="history">Storico</a></p>
+      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="history">Storico</a><a class="button secondary" href="capabilities">Capacita'</a></p>
       {_status_metrics(status)}
       <section class="panel">
         <h2>Ultimo report</h2>
@@ -188,6 +208,31 @@ def health_json_double_slash() -> dict:
     return health()
 
 
+@app.get("/capabilities", response_class=HTMLResponse)
+def capabilities_page() -> str:
+    return _page("Capacita' autonome", f"""
+      <h1>Capacita' autonome</h1>
+      <p class="muted">Queste sono le remediation che l'app puo' decidere in autonomia in base ai log. Le azioni invasive restano bloccate dalle opzioni di sicurezza e dal dry-run.</p>
+      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="history">Storico</a></p>
+      {_capabilities_html()}
+    """)
+
+
+@app.get("/capabilities.json")
+def capabilities_json() -> dict:
+    return {"capabilities": list_capabilities()}
+
+
+@app.get("//capabilities", response_class=HTMLResponse, include_in_schema=False)
+def capabilities_page_double_slash() -> str:
+    return capabilities_page()
+
+
+@app.get("//capabilities.json", include_in_schema=False)
+def capabilities_json_double_slash() -> dict:
+    return capabilities_json()
+
+
 @app.get("/history", response_class=HTMLResponse)
 def history_page() -> str:
     reports = agent.history()
@@ -200,7 +245,7 @@ def history_page() -> str:
         )
     return _page("Storico interventi", f"""
       <h1>Storico interventi</h1>
-      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="run-once">Esegui controllo ora</a></p>
+      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="capabilities">Capacita'</a></p>
       {content}
     """)
 
@@ -225,7 +270,7 @@ def run_once_get() -> str:
     report = agent.run_once(notify=True).model_dump(mode="json")
     return _page("Controllo completato", f"""
       <h1>Controllo completato</h1>
-      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="health">Stato agente</a><a class="button secondary" href="history">Storico</a></p>
+      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="health">Stato agente</a><a class="button secondary" href="history">Storico</a><a class="button secondary" href="capabilities">Capacita'</a></p>
       {_report_html(report)}
     """)
 

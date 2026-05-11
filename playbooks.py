@@ -4,6 +4,62 @@ from config import Settings
 from models import HealingAction, LogIssue
 
 
+CAPABILITIES = [
+    {
+        "kind": "reload_integration",
+        "title": "Reload integrazione Home Assistant",
+        "triggers": ["config entry failed", "config entry setup", "error setting up config entry", "entry_id=..."],
+        "action": "Chiama homeassistant.reload_config_entry sul config entry rilevato.",
+        "safety": "Consentito solo se allow_integration_reload=true. In dry-run viene solo simulato.",
+        "improvement_hint": "Migliorare l'estrazione di entry_id dai log delle integrazioni piu' frequenti.",
+    },
+    {
+        "kind": "wait_and_recheck",
+        "title": "Attesa e ricontrollo",
+        "triggers": ["platform not ready", "will retry"],
+        "action": "Attende un breve intervallo e lascia che Home Assistant completi il retry automatico.",
+        "safety": "Sempre consentito: non modifica configurazione o stato dei dispositivi.",
+        "improvement_hint": "Aggiungere un secondo controllo che verifichi se l'errore e' sparito davvero.",
+    },
+    {
+        "kind": "reload_core_config",
+        "title": "Reload configurazione core",
+        "triggers": ["invalid config", "configuration.yaml"],
+        "action": "Chiama homeassistant.reload_core_config.",
+        "safety": "Consentito solo se allow_integration_reload=true. In dry-run viene solo simulato.",
+        "improvement_hint": "Aggiungere parsing del file/linea per suggerire una correzione YAML manuale.",
+    },
+    {
+        "kind": "restart_homeassistant",
+        "title": "Restart Home Assistant",
+        "triggers": ["database is locked", "recorder error"],
+        "action": "Crea un backup parziale se configurato e poi chiama homeassistant.restart.",
+        "safety": "Disabilitato di default: richiede allow_homeassistant_restart=true.",
+        "improvement_hint": "Preferire remediation recorder piu' mirate prima del restart completo.",
+    },
+    {
+        "kind": "restart_addon",
+        "title": "Restart add-on",
+        "triggers": ["addon crashed", "addon exit code"],
+        "action": "Chiama hassio.addon_restart sullo slug rilevato.",
+        "safety": "Consentito solo se allow_addon_restart=true. In dry-run viene solo simulato.",
+        "improvement_hint": "Rendere piu' robusta l'estrazione dello slug add-on dai log Supervisor.",
+    },
+    {
+        "kind": "notify_only",
+        "title": "Solo notifica",
+        "triggers": ["errore non riconosciuto"],
+        "action": "Non modifica nulla: salva il report e invia email se configurata.",
+        "safety": "Sempre sicuro. E' il fallback quando non esiste un playbook affidabile.",
+        "improvement_hint": "Usare lo storico per creare nuovi playbook mirati agli errori ricorrenti.",
+    },
+]
+
+
+def list_capabilities() -> list[dict]:
+    return list(CAPABILITIES)
+
+
 def decide_actions(issue: LogIssue, settings: Settings) -> list[HealingAction]:
     text = f"{issue.source}\n{issue.message}\n{issue.traceback}".lower()
     actions: list[HealingAction] = []
