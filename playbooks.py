@@ -1,6 +1,7 @@
 import re
 
 from config import Settings
+from knowledge_base import match_known_issue
 from models import HealingAction, LogIssue
 
 
@@ -92,6 +93,22 @@ def decide_actions(issue: LogIssue, settings: Settings) -> list[HealingAction]:
             payload={"seconds": 30},
         ))
 
+    if "configentryauthfailed" in text or "authentication failed" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Ri-autenticazione richiesta",
+            reason="Le credenziali dell'integrazione sembrano scadute o non valide. Serve ri-autenticazione da Impostazioni > Dispositivi e Servizi.",
+            allowed=True,
+        ))
+
+    if "requirements for" in text and ("not found" in text or "failed" in text):
+        actions.append(HealingAction(
+            kind="restart_homeassistant",
+            title="Restart per reinstallare requirement",
+            reason="Home Assistant non ha trovato una libreria Python richiesta. Un restart puo' ritentare l'installazione al boot.",
+            allowed=settings.allow_homeassistant_restart,
+        ))
+
     if "invalid config" in text or "configuration.yaml" in text:
         actions.append(HealingAction(
             kind="reload_core_config",
@@ -117,6 +134,16 @@ def decide_actions(issue: LogIssue, settings: Settings) -> list[HealingAction]:
                 reason="Il log indica crash di un add-on specifico.",
                 allowed=settings.allow_addon_restart,
                 payload={"slug": slug},
+            ))
+
+    if not actions:
+        known_issue = match_known_issue(text)
+        if known_issue:
+            actions.append(HealingAction(
+                kind="notify_only",
+                title=known_issue["title"],
+                reason=f"{known_issue['diagnosis']} {known_issue['safe_response']}",
+                allowed=True,
             ))
 
     if not actions:

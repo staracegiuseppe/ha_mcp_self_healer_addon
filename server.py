@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse
 
 from agent import SelfHealingAgent
 from config import load_settings
+from knowledge_base import list_known_issues
 from mcp_http import handle_mcp
 from playbooks import list_capabilities
 
@@ -28,7 +29,7 @@ async def lifespan(_app: FastAPI):
         agent.stop()
 
 
-app = FastAPI(title="Home Assistant MCP Self Healer", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="Home Assistant MCP Self Healer", version="0.2.1", lifespan=lifespan)
 
 
 def _page(title: str, body: str) -> str:
@@ -146,6 +147,33 @@ def _capabilities_html() -> str:
     return "".join(cards)
 
 
+def _known_issues_html() -> str:
+    grouped: dict[str, list[dict]] = {}
+    for issue in list_known_issues():
+        grouped.setdefault(str(issue.get("category", "Altro")), []).append(issue)
+
+    sections = []
+    for category, issues in grouped.items():
+        cards = "".join(
+            f"""
+            <div class="metric">
+              <div class="label">{escape(str(issue.get("automation_level", "")))}</div>
+              <h2>{escape(str(issue.get("title", "")))}</h2>
+              <p>{escape(str(issue.get("diagnosis", "")))}</p>
+              <p class="muted">{escape(str(issue.get("safe_response", "")))}</p>
+            </div>
+            """
+            for issue in issues
+        )
+        sections.append(f"""
+        <section class="panel">
+          <h2>{escape(category)}</h2>
+          <div class="grid">{cards}</div>
+        </section>
+        """)
+    return "".join(sections)
+
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
     status = agent.status()
@@ -218,12 +246,17 @@ def capabilities_page() -> str:
       <p class="muted">Queste sono le remediation che l'app puo' decidere in autonomia in base ai log. Le azioni invasive restano bloccate dalle opzioni di sicurezza e dal dry-run.</p>
       <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="history">Storico</a></p>
       {_capabilities_html()}
+      <section class="panel">
+        <h2>Knowledge base diagnostica</h2>
+        <p class="muted">Queste categorie migliorano diagnosi e report. Alcune sono solo informative perche' richiedono una scelta manuale o interventi fisici.</p>
+      </section>
+      {_known_issues_html()}
     """)
 
 
 @app.get("/capabilities.json")
 def capabilities_json() -> dict:
-    return {"capabilities": list_capabilities()}
+    return {"capabilities": list_capabilities(), "known_issues": list_known_issues()}
 
 
 @app.get("//capabilities", response_class=HTMLResponse, include_in_schema=False)
