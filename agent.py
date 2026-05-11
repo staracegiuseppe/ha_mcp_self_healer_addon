@@ -40,6 +40,8 @@ class SelfHealingAgent:
             "running": not self._stop.is_set(),
             "dry_run": self.settings.dry_run,
             "auto_fix_enabled": self.settings.auto_fix_enabled,
+            "ha_url": self.settings.ha_url,
+            "supervisor_url": self.settings.supervisor_url,
             "seen_errors": len(self._seen),
             "last_report": self.last_report.model_dump(mode="json") if self.last_report else None,
         }

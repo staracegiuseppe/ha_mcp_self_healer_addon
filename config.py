@@ -58,9 +58,11 @@ def load_settings() -> Settings:
     load_dotenv()
     opts = _load_options_file()
     supervisor_token = os.getenv("SUPERVISOR_TOKEN", "")
-    token = opts.get("ha_token") or os.getenv("HA_TOKEN") or supervisor_token
+    ha_url = opts.get("ha_url") or os.getenv("HA_URL", "http://supervisor/core")
+    configured_token = opts.get("ha_token") or os.getenv("HA_TOKEN", "")
+    token = supervisor_token if ha_url.rstrip("/") == "http://supervisor/core" else (configured_token or supervisor_token)
     return Settings(
-        ha_url=opts.get("ha_url") or os.getenv("HA_URL", "http://supervisor/core"),
+        ha_url=ha_url,
         supervisor_url=opts.get("supervisor_url") or os.getenv("SUPERVISOR_URL", "http://supervisor"),
         ha_token=token,
         supervisor_token=supervisor_token,
