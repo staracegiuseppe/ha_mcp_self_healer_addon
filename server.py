@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
@@ -13,12 +14,18 @@ log = logging.getLogger(__name__)
 
 settings = load_settings()
 agent = SelfHealingAgent(settings)
-app = FastAPI(title="Home Assistant MCP Self Healer", version="0.1.0")
 
 
-@app.on_event("startup")
-def startup() -> None:
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
     agent.start_background()
+    try:
+        yield
+    finally:
+        agent.stop()
+
+
+app = FastAPI(title="Home Assistant MCP Self Healer", version="0.1.3", lifespan=lifespan)
 
 
 @app.get("/", response_class=HTMLResponse)
