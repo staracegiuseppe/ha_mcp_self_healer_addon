@@ -25,7 +25,9 @@ class SelfHealingAgent:
         self.notifier = EmailNotifier(settings)
         self.last_report: HealingReport | None = None
         self._stop = threading.Event()
-        self._seen = self._load_seen()
+        state = self._load_state()
+        self._seen = set(state.get("seen", []))
+        self._history = list(state.get("history", []))[-50:]
 
     def start_background(self) -> threading.Thread:
         thread = threading.Thread(target=self._loop, name="self-healer-loop", daemon=True)
@@ -43,8 +45,12 @@ class SelfHealingAgent:
             "ha_url": self.settings.ha_url,
             "supervisor_url": self.settings.supervisor_url,
             "seen_errors": len(self._seen),
+            "history_count": len(self._history),
             "last_report": self.last_report.model_dump(mode="json") if self.last_report else None,
         }
+
+    def history(self) -> list[dict[str, Any]]:
+        return list(reversed(self._history))
 
     def check_logs(self) -> list[LogIssue]:
         raw = self.ha.error_log()
@@ -66,7 +72,8 @@ class SelfHealingAgent:
             report.summary = self._summary(report)
             report.finished_at = datetime.utcnow()
             self.last_report = report
-            self._save_seen()
+            self._record_report(report)
+            self._save_state()
             if notify and (report.issues or self.settings.notify_on_noop):
                 self.notifier.send_report(report)
             return report
@@ -82,6 +89,8 @@ class SelfHealingAgent:
             report.summary = "Il ciclo di self-healing non e' riuscito a completarsi."
             report.finished_at = datetime.utcnow()
             self.last_report = report
+            self._record_report(report)
+            self._save_state()
             if notify:
                 self.notifier.send_report(report)
             return report
@@ -136,17 +145,30 @@ class SelfHealingAgent:
             f"Azioni: {successes} completate, {dry_runs} simulate, {failed} fallite, {skipped} saltate."
         )
 
-    def _load_seen(self) -> set[str]:
+    def _record_report(self, report: HealingReport) -> None:
+        if not report.issues and not report.actions:
+            return
+        self._history.append(report.model_dump(mode="json"))
+        self._history = self._history[-50:]
+
+    def _load_state(self) -> dict[str, Any]:
         path = STATE_PATH if STATE_PATH.parent.exists() else LOCAL_STATE_PATH
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            return set(data.get("seen", []))
+            if isinstance(data, dict):
+                return data
+            if isinstance(data, list):
+                return {"seen": data, "history": []}
         except Exception:
-            return set()
+            pass
+        return {"seen": [], "history": []}
 
-    def _save_seen(self) -> None:
+    def _save_state(self) -> None:
         path = STATE_PATH if STATE_PATH.parent.exists() else LOCAL_STATE_PATH
         try:
-            path.write_text(json.dumps({"seen": sorted(self._seen)[-500:]}, indent=2), encoding="utf-8")
+            path.write_text(
+                json.dumps({"seen": sorted(self._seen)[-500:], "history": self._history[-50:]}, indent=2),
+                encoding="utf-8",
+            )
         except Exception:
             log.warning("Unable to save state", exc_info=True)

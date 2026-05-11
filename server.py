@@ -83,6 +83,7 @@ def _status_metrics(status: dict) -> str:
       <div class="metric"><div class="label">Dry run</div><div class="value"><span class="badge {dry_run_class}">{escape(str(status.get("dry_run")))}</span></div></div>
       <div class="metric"><div class="label">Auto-fix</div><div class="value">{escape(str(status.get("auto_fix_enabled")))}</div></div>
       <div class="metric"><div class="label">Errori gia' visti</div><div class="value">{escape(str(status.get("seen_errors")))}</div></div>
+      <div class="metric"><div class="label">Report salvati</div><div class="value">{escape(str(status.get("history_count")))}</div></div>
       <div class="metric"><div class="label">HA URL</div><div class="value" style="font-size:14px">{escape(str(status.get("ha_url", "")))}</div></div>
       <div class="metric"><div class="label">Supervisor URL</div><div class="value" style="font-size:14px">{escape(str(status.get("supervisor_url", "")))}</div></div>
     </div>
@@ -135,7 +136,7 @@ def index() -> str:
         </div>
       </div>
       {_status_metrics(status)}
-      <p><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="health">Stato agente</a></p>
+      <p><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="health">Stato agente</a><a class="button secondary" href="history">Storico</a></p>
       <section class="panel">
         <h2>Ultimo report</h2>
         <p>{escape(str(summary))}</p>
@@ -159,7 +160,7 @@ def health_page() -> str:
     raw = {"ok": True, "agent": status}
     return _page("Stato agente", f"""
       <h1>Stato agente</h1>
-      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="run-once">Esegui controllo ora</a></p>
+      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="history">Storico</a></p>
       {_status_metrics(status)}
       <section class="panel">
         <h2>Ultimo report</h2>
@@ -187,12 +188,44 @@ def health_json_double_slash() -> dict:
     return health()
 
 
+@app.get("/history", response_class=HTMLResponse)
+def history_page() -> str:
+    reports = agent.history()
+    if not reports:
+        content = "<section class='panel'><h2>Nessuno storico</h2><p class='muted'>Non ci sono ancora errori o azioni salvate.</p></section>"
+    else:
+        content = "".join(
+            f"<section class='panel'><h2>Report {escape(str(report.get('finished_at') or report.get('started_at') or ''))}</h2>{_report_html(report)}</section>"
+            for report in reports
+        )
+    return _page("Storico interventi", f"""
+      <h1>Storico interventi</h1>
+      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="run-once">Esegui controllo ora</a></p>
+      {content}
+    """)
+
+
+@app.get("/history.json")
+def history_json() -> dict:
+    return {"history": agent.history()}
+
+
+@app.get("//history", response_class=HTMLResponse, include_in_schema=False)
+def history_page_double_slash() -> str:
+    return history_page()
+
+
+@app.get("//history.json", include_in_schema=False)
+def history_json_double_slash() -> dict:
+    return history_json()
+
+
 @app.get("/run-once", response_class=HTMLResponse)
 def run_once_get() -> str:
     report = agent.run_once(notify=True).model_dump(mode="json")
     return _page("Controllo completato", f"""
       <h1>Controllo completato</h1>
-      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="health">Stato agente</a></p>
+      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="health">Stato agente</a><a class="button secondary" href="history">Storico</a></p>
       {_report_html(report)}
     """)
 
