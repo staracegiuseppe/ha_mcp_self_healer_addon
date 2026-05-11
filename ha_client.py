@@ -64,9 +64,9 @@ class HomeAssistantClient:
             return str(self.get("/api/error_log", timeout=30))
         except requests.HTTPError as exc:
             status = exc.response.status_code if exc.response is not None else None
-            if status != 404:
+            if status not in {401, 403, 404}:
                 raise
-            log.info("/api/error_log returned 404, falling back to Supervisor logs")
+            log.info("/api/error_log returned HTTP %s, falling back to Supervisor logs", status)
             return self._supervisor_logs_with_fallback()
 
     def _supervisor_logs_with_fallback(self) -> str:

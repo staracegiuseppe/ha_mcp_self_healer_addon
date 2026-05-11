@@ -25,7 +25,7 @@ async def lifespan(_app: FastAPI):
         agent.stop()
 
 
-app = FastAPI(title="Home Assistant MCP Self Healer", version="0.1.3", lifespan=lifespan)
+app = FastAPI(title="Home Assistant MCP Self Healer", version="0.1.4", lifespan=lifespan)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -67,6 +67,11 @@ def index() -> str:
       </body>
     </html>
     """
+
+
+@app.get("//", response_class=HTMLResponse, include_in_schema=False)
+def index_double_slash() -> str:
+    return index()
 
 
 @app.get("/health")
