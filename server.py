@@ -53,7 +53,7 @@ def index() -> str:
         <main>
           <h1>HA MCP Self Healer</h1>
           <p>Agente attivo: <b>{status["running"]}</b> · Dry-run: <b>{status["dry_run"]}</b> · Errori memorizzati: <b>{status["seen_errors"]}</b></p>
-          <p><a class="button" href="/run-once">Esegui controllo ora</a><a class="button" href="/health">Health JSON</a></p>
+          <p><a class="button" href="run-once">Esegui controllo ora</a><a class="button" href="health">Health JSON</a></p>
           <section class="panel">
             <h2>Ultimo report</h2>
             <p>{summary}</p>
