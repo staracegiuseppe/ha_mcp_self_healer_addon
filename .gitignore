@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.self_healer_state.json
+.DS_Store
