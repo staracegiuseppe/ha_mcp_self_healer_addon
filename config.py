@@ -11,7 +11,17 @@ def _bool_env(name: str, default: bool) -> bool:
     raw = os.getenv(name)
     if raw is None:
         return default
-    return raw.strip().lower() in {"1", "true", "yes", "on"}
+    return _bool_value(raw, default)
+
+
+def _bool_value(value: Any, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
 
 
 class Settings(BaseModel):
@@ -27,6 +37,11 @@ class Settings(BaseModel):
     allow_homeassistant_restart: bool = False
     allow_addon_restart: bool = True
     allow_integration_reload: bool = True
+    allow_automation_disable: bool = False
+    loop_monitor_enabled: bool = True
+    loop_window_minutes: int = 5
+    loop_toggle_threshold: int = 8
+    loop_automation_threshold: int = 6
     max_actions_per_cycle: int = 3
     ignored_patterns: list[str] = Field(default_factory=list)
     email_enabled: bool = False
@@ -67,19 +82,24 @@ def load_settings() -> Settings:
         ha_token=token,
         supervisor_token=supervisor_token,
         check_interval_seconds=int(opts.get("check_interval_seconds") or os.getenv("CHECK_INTERVAL_SECONDS", "300")),
-        dry_run=bool(opts.get("dry_run", _bool_env("DRY_RUN", True))),
-        auto_fix_enabled=bool(opts.get("auto_fix_enabled", _bool_env("AUTO_FIX_ENABLED", True))),
-        notify_on_noop=bool(opts.get("notify_on_noop", _bool_env("NOTIFY_ON_NOOP", False))),
-        create_backup_before_restart=bool(opts.get("create_backup_before_restart", _bool_env("CREATE_BACKUP_BEFORE_RESTART", True))),
-        allow_homeassistant_restart=bool(opts.get("allow_homeassistant_restart", _bool_env("ALLOW_HOMEASSISTANT_RESTART", False))),
-        allow_addon_restart=bool(opts.get("allow_addon_restart", _bool_env("ALLOW_ADDON_RESTART", True))),
-        allow_integration_reload=bool(opts.get("allow_integration_reload", _bool_env("ALLOW_INTEGRATION_RELOAD", True))),
+        dry_run=_bool_value(opts.get("dry_run"), _bool_env("DRY_RUN", True)),
+        auto_fix_enabled=_bool_value(opts.get("auto_fix_enabled"), _bool_env("AUTO_FIX_ENABLED", True)),
+        notify_on_noop=_bool_value(opts.get("notify_on_noop"), _bool_env("NOTIFY_ON_NOOP", False)),
+        create_backup_before_restart=_bool_value(opts.get("create_backup_before_restart"), _bool_env("CREATE_BACKUP_BEFORE_RESTART", True)),
+        allow_homeassistant_restart=_bool_value(opts.get("allow_homeassistant_restart"), _bool_env("ALLOW_HOMEASSISTANT_RESTART", False)),
+        allow_addon_restart=_bool_value(opts.get("allow_addon_restart"), _bool_env("ALLOW_ADDON_RESTART", True)),
+        allow_integration_reload=_bool_value(opts.get("allow_integration_reload"), _bool_env("ALLOW_INTEGRATION_RELOAD", True)),
+        allow_automation_disable=_bool_value(opts.get("allow_automation_disable"), _bool_env("ALLOW_AUTOMATION_DISABLE", False)),
+        loop_monitor_enabled=_bool_value(opts.get("loop_monitor_enabled"), _bool_env("LOOP_MONITOR_ENABLED", True)),
+        loop_window_minutes=int(opts.get("loop_window_minutes") or os.getenv("LOOP_WINDOW_MINUTES", "5")),
+        loop_toggle_threshold=int(opts.get("loop_toggle_threshold") or os.getenv("LOOP_TOGGLE_THRESHOLD", "8")),
+        loop_automation_threshold=int(opts.get("loop_automation_threshold") or os.getenv("LOOP_AUTOMATION_THRESHOLD", "6")),
         max_actions_per_cycle=int(opts.get("max_actions_per_cycle") or os.getenv("MAX_ACTIONS_PER_CYCLE", "3")),
         ignored_patterns=list(opts.get("ignored_patterns") or []),
-        email_enabled=bool(opts.get("email_enabled", _bool_env("EMAIL_ENABLED", False))),
+        email_enabled=_bool_value(opts.get("email_enabled"), _bool_env("EMAIL_ENABLED", False)),
         smtp_host=opts.get("smtp_host") or os.getenv("SMTP_HOST", "smtp.gmail.com"),
         smtp_port=int(opts.get("smtp_port") or os.getenv("SMTP_PORT", "587")),
-        smtp_tls=bool(opts.get("smtp_tls", _bool_env("SMTP_TLS", True))),
+        smtp_tls=_bool_value(opts.get("smtp_tls"), _bool_env("SMTP_TLS", True)),
         smtp_user=opts.get("smtp_user") or os.getenv("SMTP_USER", ""),
         smtp_password=opts.get("smtp_password") or os.getenv("SMTP_PASSWORD", ""),
         email_from=opts.get("email_from") or os.getenv("EMAIL_FROM", ""),

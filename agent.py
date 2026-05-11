@@ -8,6 +8,7 @@ from typing import Any
 
 from config import Settings
 from ha_client import HomeAssistantClient
+from loop_detector import detect_loops
 from log_analyzer import parse_error_log
 from models import ActionResult, HealingAction, HealingReport, LogIssue
 from notifier import EmailNotifier
@@ -42,6 +43,11 @@ class SelfHealingAgent:
             "running": not self._stop.is_set(),
             "dry_run": self.settings.dry_run,
             "auto_fix_enabled": self.settings.auto_fix_enabled,
+            "loop_monitor_enabled": self.settings.loop_monitor_enabled,
+            "loop_window_minutes": self.settings.loop_window_minutes,
+            "loop_toggle_threshold": self.settings.loop_toggle_threshold,
+            "loop_automation_threshold": self.settings.loop_automation_threshold,
+            "allow_automation_disable": self.settings.allow_automation_disable,
             "ha_url": self.settings.ha_url,
             "supervisor_url": self.settings.supervisor_url,
             "seen_errors": len(self._seen),
@@ -64,6 +70,16 @@ class SelfHealingAgent:
             report.issues = issues
             for issue in issues:
                 for action in decide_actions(issue, self.settings):
+                    if len(report.actions) >= self.settings.max_actions_per_cycle:
+                        break
+                    report.actions.append(self._execute_action(action))
+                self._seen.add(issue.fingerprint)
+
+            for issue, actions in self.detect_live_loops():
+                if issue.fingerprint in self._seen:
+                    continue
+                report.issues.append(issue)
+                for action in actions:
                     if len(report.actions) >= self.settings.max_actions_per_cycle:
                         break
                     report.actions.append(self._execute_action(action))
@@ -95,6 +111,16 @@ class SelfHealingAgent:
                 self.notifier.send_report(report)
             return report
 
+    def detect_live_loops(self) -> list[tuple[LogIssue, list[HealingAction]]]:
+        if not self.settings.loop_monitor_enabled:
+            return []
+        try:
+            entries = self.ha.logbook_recent(self.settings.loop_window_minutes)
+            return detect_loops(entries, self.settings)
+        except Exception as exc:
+            log.warning("Loop monitor failed: %s", exc)
+            return []
+
     def _loop(self) -> None:
         log.info("Self-healing loop started, interval=%ss", self.settings.check_interval_seconds)
         while not self._stop.is_set():
@@ -122,6 +148,8 @@ class SelfHealingAgent:
             elif action.kind == "restart_addon":
                 slug = action.payload["slug"]
                 response = self.ha.restart_addon(slug)
+            elif action.kind == "disable_automation":
+                response = self.ha.turn_off_automation(action.payload["entity_id"])
             elif action.kind == "wait_and_recheck":
                 time.sleep(int(action.payload.get("seconds", 30)))
                 response = {"waited": action.payload.get("seconds", 30)}

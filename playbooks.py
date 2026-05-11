@@ -46,6 +46,14 @@ CAPABILITIES = [
         "improvement_hint": "Rendere piu' robusta l'estrazione dello slug add-on dai log Supervisor.",
     },
     {
+        "kind": "disable_automation",
+        "title": "Stop loop automazione/luci",
+        "triggers": ["automazione ripetuta molte volte nel logbook", "luce/switch/fan che alterna on/off troppe volte"],
+        "action": "Chiama automation.turn_off con stop_actions=true sull'automazione sospetta.",
+        "safety": "Disabilitato di default: richiede allow_automation_disable=true. In dry-run viene solo simulato.",
+        "improvement_hint": "Collegare meglio dispositivo oscillante e automazione responsabile usando context_id e trace.",
+    },
+    {
         "kind": "notify_only",
         "title": "Solo notifica",
         "triggers": ["errore non riconosciuto"],

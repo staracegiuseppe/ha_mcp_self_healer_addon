@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import requests
@@ -31,6 +32,14 @@ class HomeAssistantClient:
 
     def get(self, path: str, timeout: int = 20) -> Any:
         response = self.session.get(self._url(path), timeout=timeout)
+        response.raise_for_status()
+        content_type = response.headers.get("content-type", "")
+        if "application/json" in content_type:
+            return response.json()
+        return response.text
+
+    def get_with_params(self, path: str, params: dict[str, Any] | None = None, timeout: int = 20) -> Any:
+        response = self.session.get(self._url(path), params=params or {}, timeout=timeout)
         response.raise_for_status()
         content_type = response.headers.get("content-type", "")
         if "application/json" in content_type:
@@ -120,3 +129,16 @@ class HomeAssistantClient:
 
     def restart_addon(self, slug: str) -> Any:
         return self.call_service("hassio", "addon_restart", {"addon": slug})
+
+    def turn_off_automation(self, entity_id: str) -> Any:
+        return self.call_service("automation", "turn_off", {"entity_id": entity_id, "stop_actions": True})
+
+    def logbook_recent(self, minutes: int) -> list[dict[str, Any]]:
+        end = datetime.now(timezone.utc)
+        start = end - timedelta(minutes=minutes)
+        data = self.get_with_params(
+            f"/api/logbook/{start.isoformat()}",
+            {"end_time": end.isoformat()},
+            timeout=30,
+        )
+        return data if isinstance(data, list) else []

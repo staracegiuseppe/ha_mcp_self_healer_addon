@@ -28,7 +28,7 @@ async def lifespan(_app: FastAPI):
         agent.stop()
 
 
-app = FastAPI(title="Home Assistant MCP Self Healer", version="0.1.8", lifespan=lifespan)
+app = FastAPI(title="Home Assistant MCP Self Healer", version="0.2.0", lifespan=lifespan)
 
 
 def _page(title: str, body: str) -> str:
@@ -83,6 +83,9 @@ def _status_metrics(status: dict) -> str:
       <div class="metric"><div class="label">Agente</div><div class="value"><span class="badge {running_class}">{escape(str(status.get("running")))}</span></div></div>
       <div class="metric"><div class="label">Dry run</div><div class="value"><span class="badge {dry_run_class}">{escape(str(status.get("dry_run")))}</span></div></div>
       <div class="metric"><div class="label">Auto-fix</div><div class="value">{escape(str(status.get("auto_fix_enabled")))}</div></div>
+      <div class="metric"><div class="label">Loop monitor</div><div class="value">{escape(str(status.get("loop_monitor_enabled")))}</div></div>
+      <div class="metric"><div class="label">Finestra loop</div><div class="value">{escape(str(status.get("loop_window_minutes")))} min</div></div>
+      <div class="metric"><div class="label">Stop automazioni</div><div class="value">{escape(str(status.get("allow_automation_disable")))}</div></div>
       <div class="metric"><div class="label">Errori gia' visti</div><div class="value">{escape(str(status.get("seen_errors")))}</div></div>
       <div class="metric"><div class="label">Report salvati</div><div class="value">{escape(str(status.get("history_count")))}</div></div>
       <div class="metric"><div class="label">HA URL</div><div class="value" style="font-size:14px">{escape(str(status.get("ha_url", "")))}</div></div>
