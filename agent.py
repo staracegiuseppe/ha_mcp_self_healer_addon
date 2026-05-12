@@ -141,6 +141,8 @@ class SelfHealingAgent:
         try:
             if action.kind == "reload_integration":
                 response = self.ha.reload_integration(action.payload["entry_id"])
+            elif action.kind == "reload_integration_by_domain":
+                response = self._reload_integration_by_domain(action.payload["domain"])
             elif action.kind == "reload_core_config":
                 response = self.ha.reload_core_config()
             elif action.kind == "restart_homeassistant":
@@ -165,6 +167,18 @@ class SelfHealingAgent:
             return ActionResult(action=action, status="success", detail="Azione completata.", response=response)
         except Exception as exc:
             return ActionResult(action=action, status="failed", detail=str(exc))
+
+    def _reload_integration_by_domain(self, domain: str) -> dict[str, Any]:
+        entries = self.ha.get_config_entries(domain)
+        if not entries:
+            return {"ok": False, "domain": domain, "reloaded": [], "detail": "Nessun config entry trovato."}
+        results = []
+        for entry in entries:
+            entry_id = entry.get("entry_id") or entry.get("id")
+            if not entry_id:
+                continue
+            results.append({"entry_id": entry_id, "response": self.ha.reload_integration(entry_id)})
+        return {"ok": bool(results), "domain": domain, "reloaded": results}
 
     def _summary(self, report: HealingReport) -> str:
         if not report.issues:

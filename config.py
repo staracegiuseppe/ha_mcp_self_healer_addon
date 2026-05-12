@@ -6,6 +6,12 @@ from typing import Any
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
+DEFAULT_IGNORED_PATTERNS = [
+    "emulated_hue.hue_api",
+    "No update available",
+    "Installing a specific version is not supported",
+]
+
 
 def _bool_env(name: str, default: bool) -> bool:
     raw = os.getenv(name)
@@ -45,7 +51,7 @@ class Settings(BaseModel):
     loop_automation_threshold: int = 6
     seen_ttl_hours: int = 6
     max_actions_per_cycle: int = 10
-    ignored_patterns: list[str] = Field(default_factory=list)
+    ignored_patterns: list[str] = Field(default_factory=lambda: list(DEFAULT_IGNORED_PATTERNS))
     email_enabled: bool = False
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
@@ -99,7 +105,7 @@ def load_settings() -> Settings:
         loop_automation_threshold=int(opts.get("loop_automation_threshold") or os.getenv("LOOP_AUTOMATION_THRESHOLD", "6")),
         seen_ttl_hours=int(opts.get("seen_ttl_hours") or os.getenv("SEEN_TTL_HOURS", "6")),
         max_actions_per_cycle=int(opts.get("max_actions_per_cycle") or os.getenv("MAX_ACTIONS_PER_CYCLE", "10")),
-        ignored_patterns=list(opts.get("ignored_patterns") or []),
+        ignored_patterns=list(opts.get("ignored_patterns") or DEFAULT_IGNORED_PATTERNS),
         email_enabled=_bool_value(opts.get("email_enabled"), _bool_env("EMAIL_ENABLED", False)),
         smtp_host=opts.get("smtp_host") or os.getenv("SMTP_HOST", "smtp.gmail.com"),
         smtp_port=int(opts.get("smtp_port") or os.getenv("SMTP_PORT", "587")),

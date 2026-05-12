@@ -108,6 +108,14 @@ class HomeAssistantClient:
     def reload_integration(self, entry_id: str) -> Any:
         return self.post("/api/services/homeassistant/reload_config_entry", {"entry_id": entry_id})
 
+    def get_config_entries(self, domain: str | None = None) -> list[dict[str, Any]]:
+        entries = self.get("/api/config/config_entries/entry")
+        if not isinstance(entries, list):
+            return []
+        if domain:
+            return [entry for entry in entries if entry.get("domain") == domain]
+        return entries
+
     def restart_homeassistant(self) -> Any:
         return self.call_service("homeassistant", "restart", {})
 

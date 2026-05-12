@@ -15,6 +15,14 @@ CAPABILITIES = [
         "improvement_hint": "Migliorare l'estrazione di entry_id dai log delle integrazioni piu' frequenti.",
     },
     {
+        "kind": "reload_integration_by_domain",
+        "title": "Reload integrazione per dominio",
+        "triggers": ["pychromecast failed to connect", "connection reset by peer"],
+        "action": "L'agent cerca i config entry del dominio indicato e chiama homeassistant.reload_config_entry.",
+        "safety": "Consentito solo se allow_integration_reload=true. In dry-run viene solo simulato.",
+        "improvement_hint": "Associare IP/dispositivo al singolo config entry quando Home Assistant lo espone.",
+    },
+    {
         "kind": "wait_and_recheck",
         "title": "Attesa e ricontrollo",
         "triggers": ["platform not ready", "will retry"],
@@ -222,12 +230,21 @@ def decide_actions(issue: LogIssue, settings: Settings) -> list[HealingAction]:
         ))
 
     if "pychromecast.socket_client" in text or "async_upnp_client" in text:
-        actions.append(HealingAction(
-            kind="notify_only",
-            title="Dispositivo media non raggiungibile",
-            reason="Chromecast/DLNA/UPnP non risponde o resetta la connessione. Verificare IP fisso, standby del TV e connettivita' LAN.",
-            allowed=True,
-        ))
+        if "pychromecast.socket_client" in text:
+            actions.append(HealingAction(
+                kind="reload_integration_by_domain",
+                title="Reload integrazione Cast",
+                reason="pychromecast segnala connessione persa. L'agent provera' a risolvere il config entry del dominio cast e fare reload.",
+                allowed=settings.allow_integration_reload,
+                payload={"domain": "cast"},
+            ))
+        else:
+            actions.append(HealingAction(
+                kind="notify_only",
+                title="Dispositivo media non raggiungibile",
+                reason="DLNA/UPnP non risponde o resetta la connessione. Verificare IP fisso, standby del TV e connettivita' LAN.",
+                allowed=True,
+            ))
 
     if "ezviz" in text and ("invalid response from api" in text or "does not support action" in text):
         actions.append(HealingAction(
