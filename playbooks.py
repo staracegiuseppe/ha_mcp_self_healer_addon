@@ -23,6 +23,14 @@ CAPABILITIES = [
         "improvement_hint": "Associare IP/dispositivo al singolo config entry quando Home Assistant lo espone.",
     },
     {
+        "kind": "reload_alexa_exposure",
+        "title": "Reload esposizione Alexa/Emulated Hue",
+        "triggers": ["emulated_hue entity not found", "alexa discovery stale", "cloud alexa exposure errors"],
+        "action": "Ricarica i config entry cloud/emulated_hue quando presenti e poi ricarica la configurazione core.",
+        "safety": "Consentito solo se allow_alexa_exposure_reload=true. Non elimina dispositivi da Alexa: quello va fatto dal client se l'entita' e' stata rimossa.",
+        "improvement_hint": "Aggiungere update automatico delle exposure quando Home Assistant espone un endpoint REST stabile per Alexa.",
+    },
+    {
         "kind": "wait_and_recheck",
         "title": "Attesa e ricontrollo",
         "triggers": ["platform not ready", "will retry"],
@@ -136,14 +144,22 @@ def decide_actions(issue: LogIssue, settings: Settings) -> list[HealingAction]:
     if "emulated_hue" in text and "entity not found" in text:
         missing_entity = _extract_missing_entity(text)
         actions.append(HealingAction(
-            kind="notify_only",
-            title="Pulizia discovery Emulated Hue",
+            kind="reload_alexa_exposure",
+            title="Reload esposizione Alexa/Emulated Hue",
             reason=(
                 f"Il client Hue/Alexa sta ancora chiamando {missing_entity or 'una vecchia entita'} non piu' presente in Home Assistant. "
-                "Rimuovi quel dispositivo dal client vocale/app Hue compatibile e rifai la discovery; non esiste una correzione REST sicura su una entita' gia' assente."
+                "L'agent ricarica l'esposizione lato Home Assistant; se Alexa ha ancora il vecchio device in cache, dovra' dimenticarlo e rifare discovery."
             ),
-            allowed=True,
+            allowed=settings.allow_alexa_exposure_reload,
             payload={"entity_id": missing_entity} if missing_entity else {},
+        ))
+
+    if "alexa" in text and ("discovery" in text or "exposure" in text or "not found" in text or "entity not found" in text):
+        actions.append(HealingAction(
+            kind="reload_alexa_exposure",
+            title="Reload esposizione Alexa",
+            reason="Il log indica un problema di discovery/esposizione Alexa. Ricarico Cloud/Emulated Hue e la configurazione core.",
+            allowed=settings.allow_alexa_exposure_reload,
         ))
 
     if "referenced entities" in text and ("missing" in text or "not currently available" in text):

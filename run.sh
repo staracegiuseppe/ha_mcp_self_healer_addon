@@ -30,6 +30,7 @@ export ALLOW_HOMEASSISTANT_RESTART="$(get_opt allow_homeassistant_restart false)
 export ALLOW_ADDON_RESTART="$(get_opt allow_addon_restart true)"
 export ALLOW_INTEGRATION_RELOAD="$(get_opt allow_integration_reload true)"
 export ALLOW_BROWSER_MOD_CLEANUP="$(get_opt allow_browser_mod_cleanup true)"
+export ALLOW_ALEXA_EXPOSURE_RELOAD="$(get_opt allow_alexa_exposure_reload true)"
 export MAX_ACTIONS_PER_CYCLE="$(get_opt max_actions_per_cycle 3)"
 export EMAIL_ENABLED="$(get_opt email_enabled false)"
 export SMTP_HOST="$(get_opt smtp_host smtp.gmail.com)"

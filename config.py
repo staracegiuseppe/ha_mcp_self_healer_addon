@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 DEFAULT_IGNORED_PATTERNS = [
-    "emulated_hue.hue_api",
     "No update available",
     "Installing a specific version is not supported",
 ]
@@ -46,6 +45,7 @@ class Settings(BaseModel):
     allow_automation_disable: bool = False
     allow_script_stop: bool = True
     allow_browser_mod_cleanup: bool = True
+    allow_alexa_exposure_reload: bool = True
     loop_monitor_enabled: bool = True
     loop_window_minutes: int = 5
     loop_toggle_threshold: int = 8
@@ -101,6 +101,7 @@ def load_settings() -> Settings:
         allow_automation_disable=_bool_value(opts.get("allow_automation_disable"), _bool_env("ALLOW_AUTOMATION_DISABLE", False)),
         allow_script_stop=_bool_value(opts.get("allow_script_stop"), _bool_env("ALLOW_SCRIPT_STOP", True)),
         allow_browser_mod_cleanup=_bool_value(opts.get("allow_browser_mod_cleanup"), _bool_env("ALLOW_BROWSER_MOD_CLEANUP", True)),
+        allow_alexa_exposure_reload=_bool_value(opts.get("allow_alexa_exposure_reload"), _bool_env("ALLOW_ALEXA_EXPOSURE_RELOAD", True)),
         loop_monitor_enabled=_bool_value(opts.get("loop_monitor_enabled"), _bool_env("LOOP_MONITOR_ENABLED", True)),
         loop_window_minutes=int(opts.get("loop_window_minutes") or os.getenv("LOOP_WINDOW_MINUTES", "5")),
         loop_toggle_threshold=int(opts.get("loop_toggle_threshold") or os.getenv("LOOP_TOGGLE_THRESHOLD", "8")),

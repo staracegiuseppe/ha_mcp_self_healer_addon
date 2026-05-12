@@ -52,6 +52,7 @@ class SelfHealingAgent:
             "seen_ttl_hours": self.settings.seen_ttl_hours,
             "allow_automation_disable": self.settings.allow_automation_disable,
             "allow_browser_mod_cleanup": self.settings.allow_browser_mod_cleanup,
+            "allow_alexa_exposure_reload": self.settings.allow_alexa_exposure_reload,
             "ha_url": self.settings.ha_url,
             "supervisor_url": self.settings.supervisor_url,
             "seen_errors": len(self._seen),
@@ -161,6 +162,8 @@ class SelfHealingAgent:
                 response = self.ha.turn_off_script(action.payload["entity_id"])
             elif action.kind == "cleanup_browser_mod_obsolete":
                 response = self._cleanup_browser_mod_obsolete()
+            elif action.kind == "reload_alexa_exposure":
+                response = self._reload_alexa_exposure(action.payload.get("entity_id"))
             elif action.kind == "wait_and_recheck":
                 time.sleep(int(action.payload.get("seconds", 30)))
                 response = {"waited": action.payload.get("seconds", 30)}
@@ -211,6 +214,30 @@ class SelfHealingAgent:
             "kept_browser_ids": sorted(active_ids),
             "browser_ids_seen": sorted(browser_ids),
             "response": response,
+        }
+
+    def _reload_alexa_exposure(self, entity_id: str | None = None) -> dict[str, Any]:
+        entity_exists = None
+        if entity_id:
+            entity_exists = any(state.get("entity_id") == entity_id for state in self.ha.get_states())
+
+        results: list[dict[str, Any]] = []
+        for domain in ("cloud", "emulated_hue"):
+            result = self._reload_integration_by_domain(domain)
+            if result.get("ok"):
+                results.append(result)
+
+        core_reload = self.ha.reload_core_config()
+        return {
+            "ok": True,
+            "entity_id": entity_id,
+            "entity_exists": entity_exists,
+            "integration_reloads": results,
+            "core_reload": core_reload,
+            "detail": (
+                "Ricaricata esposizione Alexa/Home Assistant Cloud o Emulated Hue quando disponibile. "
+                "Se l'entita' non esiste piu', Alexa deve comunque dimenticare il vecchio dispositivo e rifare discovery."
+            ),
         }
 
     def _summary(self, report: HealingReport) -> str:
