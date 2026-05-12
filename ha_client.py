@@ -116,6 +116,14 @@ class HomeAssistantClient:
             return [entry for entry in entries if entry.get("domain") == domain]
         return entries
 
+    def get_states(self) -> list[dict[str, Any]]:
+        states = self.get("/api/states")
+        return states if isinstance(states, list) else []
+
+    def deregister_browser_mod(self, browser_id_exclude: list[str]) -> Any:
+        payload = {"browser_id_exclude": browser_id_exclude}
+        return self.call_service("browser_mod", "deregister_browser", payload)
+
     def restart_homeassistant(self) -> Any:
         return self.call_service("homeassistant", "restart", {})
 

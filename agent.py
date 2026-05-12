@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import threading
 import time
 from datetime import datetime, timedelta
@@ -50,6 +51,7 @@ class SelfHealingAgent:
             "loop_automation_threshold": self.settings.loop_automation_threshold,
             "seen_ttl_hours": self.settings.seen_ttl_hours,
             "allow_automation_disable": self.settings.allow_automation_disable,
+            "allow_browser_mod_cleanup": self.settings.allow_browser_mod_cleanup,
             "ha_url": self.settings.ha_url,
             "supervisor_url": self.settings.supervisor_url,
             "seen_errors": len(self._seen),
@@ -157,6 +159,8 @@ class SelfHealingAgent:
                 response = self.ha.turn_off_automation(action.payload["entity_id"])
             elif action.kind == "stop_script":
                 response = self.ha.turn_off_script(action.payload["entity_id"])
+            elif action.kind == "cleanup_browser_mod_obsolete":
+                response = self._cleanup_browser_mod_obsolete()
             elif action.kind == "wait_and_recheck":
                 time.sleep(int(action.payload.get("seconds", 30)))
                 response = {"waited": action.payload.get("seconds", 30)}
@@ -179,6 +183,35 @@ class SelfHealingAgent:
                 continue
             results.append({"entry_id": entry_id, "response": self.ha.reload_integration(entry_id)})
         return {"ok": bool(results), "domain": domain, "reloaded": results}
+
+    def _cleanup_browser_mod_obsolete(self) -> dict[str, Any]:
+        states = self.ha.get_states()
+        browser_ids: dict[str, list[dict[str, Any]]] = {}
+        for state in states:
+            entity_id = str(state.get("entity_id", ""))
+            match = re.search(r"browser_mod_[a-f0-9]{8}_[a-f0-9]{8}", entity_id)
+            if match:
+                browser_ids.setdefault(match.group(0), []).append(state)
+
+        active_ids = []
+        for browser_id, entities in browser_ids.items():
+            if any(entity.get("state") not in {"unknown", "unavailable"} for entity in entities):
+                active_ids.append(browser_id)
+
+        if not active_ids:
+            return {
+                "ok": False,
+                "detail": "Nessun browser Browser Mod attivo trovato; pulizia non eseguita per evitare deregistrazione totale.",
+                "browser_ids_seen": sorted(browser_ids),
+            }
+
+        response = self.ha.deregister_browser_mod(sorted(active_ids))
+        return {
+            "ok": True,
+            "kept_browser_ids": sorted(active_ids),
+            "browser_ids_seen": sorted(browser_ids),
+            "response": response,
+        }
 
     def _summary(self, report: HealingReport) -> str:
         if not report.issues:

@@ -71,6 +71,14 @@ CAPABILITIES = [
         "improvement_hint": "Suggerire anche mode restart/queued quando lo stesso script viene richiamato spesso.",
     },
     {
+        "kind": "cleanup_browser_mod_obsolete",
+        "title": "Pulizia browser obsoleti Browser Mod",
+        "triggers": ["browser_mod missing/not currently available", "homekit 150 device limit con browser_mod"],
+        "action": "Rileva i Browser Mod ancora attivi e chiama browser_mod.deregister_browser escludendo quelli vivi.",
+        "safety": "Consentito solo se allow_browser_mod_cleanup=true. Non cancella entita' manualmente e non deregistra se non trova almeno un browser attivo.",
+        "improvement_hint": "Aggiungere una allowlist di browser fissi, ad esempio tablet a muro, se devono restare registrati anche quando offline.",
+    },
+    {
         "kind": "notify_only",
         "title": "Solo notifica",
         "triggers": ["errore non riconosciuto"],
@@ -140,15 +148,35 @@ def decide_actions(issue: LogIssue, settings: Settings) -> list[HealingAction]:
 
     if "referenced entities" in text and ("missing" in text or "not currently available" in text):
         missing_entity = _extract_referenced_entity(text)
+        if "browser_mod" in text:
+            actions.append(HealingAction(
+                kind="cleanup_browser_mod_obsolete",
+                title="Pulizia Browser Mod obsoleti",
+                reason=(
+                    f"Browser Mod sta lasciando riferimenti non disponibili ({missing_entity or 'entita browser_mod'}). "
+                    "L'agent deregistra i browser non attivi mantenendo esclusi quelli ancora vivi."
+                ),
+                allowed=settings.allow_browser_mod_cleanup,
+                payload={"entity_id": missing_entity} if missing_entity else {},
+            ))
+        else:
+            actions.append(HealingAction(
+                kind="notify_only",
+                title="Entita' referenziata mancante",
+                reason=(
+                    f"Una automazione/script/dashboard sta usando {missing_entity or 'una entita'} non disponibile. "
+                    "Aggiungi una guard condition, correggi il riferimento o usa continue_on_error se l'azione non deve bloccare la sequenza."
+                ),
+                allowed=True,
+                payload={"entity_id": missing_entity} if missing_entity else {},
+            ))
+
+    if "browser_mod" in text and "150 device limit" in text:
         actions.append(HealingAction(
-            kind="notify_only",
-            title="Entita' referenziata mancante",
-            reason=(
-                f"Una automazione/script/dashboard sta usando {missing_entity or 'una entita'} non disponibile. "
-                "Aggiungi una guard condition, correggi il riferimento o usa continue_on_error se l'azione non deve bloccare la sequenza."
-            ),
-            allowed=True,
-            payload={"entity_id": missing_entity} if missing_entity else {},
+            kind="cleanup_browser_mod_obsolete",
+            title="Pulizia Browser Mod per limite HomeKit",
+            reason="HomeKit ha superato il limite di 150 device anche per vecchi browser Browser Mod. Pulisco le registrazioni obsolete conservando i browser attivi.",
+            allowed=settings.allow_browser_mod_cleanup,
         ))
 
     if "no update available" in text and "update.ha_mcp_self_healer_update" in text:
