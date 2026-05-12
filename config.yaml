@@ -1,13 +1,11 @@
 name: HA MCP Self Healer
-version: "0.2.3"
+version: "0.2.4"
 slug: ha_mcp_self_healer
 description: MCP agent for Home Assistant log monitoring, conservative self-healing, and email reporting.
 url: https://github.com/staracegiuseppe/ha_mcp_self_healer_addon
 arch:
   - aarch64
   - amd64
-  - armhf
-  - armv7
 startup: application
 boot: auto
 init: false

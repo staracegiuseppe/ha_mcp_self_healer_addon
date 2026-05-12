@@ -269,6 +269,70 @@ def decide_actions(issue: LogIssue, settings: Settings) -> list[HealingAction]:
             allowed=True,
         ))
 
+    if "app config 'arch' uses deprecated values" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Architetture add-on deprecate",
+            reason="Supervisor segnala architetture deprecate nel config di un add-on. Per HA MCP Self Healer e' stato corretto rimuovendo armhf/armv7; per add-on terzi serve update del maintainer.",
+            allowed=True,
+        ))
+
+    if "deprecated 'codenotary' field" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Campo codenotary deprecato",
+            reason="Il campo codenotary non viene piu' usato dal Supervisor. Non rompe l'avvio, ma va rimosso dal config dell'add-on dal rispettivo maintainer.",
+            allowed=True,
+        ))
+
+    if "deprecated 'advanced' field" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Campo advanced deprecato",
+            reason="Il campo advanced e' ignorato dal Supervisor moderno. Non blocca l'avvio, ma va rimosso dal config dell'add-on dal maintainer.",
+            allowed=True,
+        ))
+
+    if "has full device access, and selective device access" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Accesso dispositivi add-on ridondante",
+            reason="Supervisor segnala che un add-on usa sia full device access sia device access selettivo. Non blocca l'avvio, ma il maintainer dovrebbe scegliere un solo modello.",
+            allowed=True,
+        ))
+
+    if "error websocket message received while proxying" in text and "cannot write to closing transport" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Proxy WebSocket chiuso dal client",
+            reason="Supervisor stava proxyando un WebSocket verso un add-on, ma il client ha chiuso la connessione. Se isolato e' innocuo; se ricorrente verificare add-on e rete/client.",
+            allowed=True,
+        ))
+
+    if "failed to validate image signature" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Firma immagine Docker non validabile",
+            reason="Il daemon Docker non riesce a validare la firma dell'immagine per manifest non atteso. Verificare add-on/immagine e aggiornamenti Supervisor; non cancello immagini automaticamente.",
+            allowed=True,
+        ))
+
+    if "forcibly turning on oci-mediatype mode for attestations" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="BuildKit OCI mediatype informativo",
+            reason="BuildKit ha forzato OCI mediatype per le attestazioni. Se la build si conclude, e' rumore informativo.",
+            allowed=True,
+        ))
+
+    if "error reading preface" in text and "docker.sock" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Connessione Docker socket resettata",
+            reason="Una connessione locale al Docker socket e' stata chiusa durante build/update. Se isolata non richiede fix; se ricorrente va verificato il ciclo di build.",
+            allowed=True,
+        ))
+
     if "invalid config" in text or "configuration.yaml" in text:
         actions.append(HealingAction(
             kind="reload_core_config",

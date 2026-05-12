@@ -4,8 +4,11 @@ import re
 from models import LogIssue
 
 
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
 LOG_LINE = re.compile(r"^(?P<date>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+) (?P<level>[A-Z]+) \((?P<thread>[^)]+)\) \[(?P<source>[^\]]+)\] (?P<message>.*)$")
 ERROR_START = re.compile(r"^(?P<date>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+) (?P<level>ERROR|WARNING|CRITICAL) \((?P<thread>[^)]+)\) \[(?P<source>[^\]]+)\] (?P<message>.*)$")
+HOST_LINE = re.compile(r"^(?P<date>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+) (?P<host>\S+) (?P<process>[a-zA-Z0-9_.-]+)(?:\[\d+\])?: (?P<message>.*)$")
+DOCKER_LEVEL = re.compile(r'level=(?P<level>error|warning|warn|fatal|critical)\s+msg="(?P<message>[^"]+)"(?P<tail>.*)$', re.IGNORECASE)
 TRACEBACK_STARTS = (
     "Traceback (most recent call last):",
     "During handling of the above exception, another exception occurred:",
@@ -24,7 +27,8 @@ def parse_error_log(raw_log: str, ignored_patterns: list[str] | None = None, lim
     traceback_lines: list[str] = []
     orphan_traceback: list[str] = []
 
-    for line in raw_log.splitlines():
+    for raw_line in raw_log.splitlines():
+        line = ANSI.sub("", raw_line)
         match = ERROR_START.match(line)
         if match:
             if current:
@@ -35,6 +39,18 @@ def parse_error_log(raw_log: str, ignored_patterns: list[str] | None = None, lim
             current = match.groupdict()
             traceback_lines = []
             continue
+        host_match = HOST_LINE.match(line)
+        if host_match:
+            host_issue = _host_issue_fields(host_match)
+            if host_issue:
+                if current:
+                    issues.append(_build_issue(current, traceback_lines))
+                    traceback_lines = []
+                elif orphan_traceback:
+                    issues.append(_build_orphan_traceback(orphan_traceback))
+                    orphan_traceback = []
+                current = host_issue
+                continue
         if LOG_LINE.match(line):
             if current:
                 issues.append(_build_issue(current, traceback_lines))
@@ -90,6 +106,35 @@ def _build_issue(fields: dict[str, str], traceback_lines: list[str]) -> LogIssue
         message=message,
         traceback=traceback,
     )
+
+
+def _host_issue_fields(match: re.Match[str]) -> dict[str, str] | None:
+    process = match.group("process")
+    message = match.group("message")
+    docker = DOCKER_LEVEL.search(message)
+    if docker:
+        level = docker.group("level").upper().replace("WARN", "WARNING")
+        detail = docker.group("message")
+        tail = docker.group("tail").strip()
+        if tail:
+            detail = f"{detail} {tail}"
+        return {
+            "date": match.group("date"),
+            "level": level,
+            "thread": process,
+            "source": f"host.{process}",
+            "message": detail,
+        }
+    lowered = message.lower()
+    if "error reading preface" in lowered or "connection reset by peer" in lowered:
+        return {
+            "date": match.group("date"),
+            "level": "WARNING",
+            "thread": process,
+            "source": f"host.{process}",
+            "message": message,
+        }
+    return None
 
 
 def _build_orphan_traceback(traceback_lines: list[str]) -> LogIssue:
