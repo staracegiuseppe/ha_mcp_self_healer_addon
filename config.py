@@ -38,12 +38,13 @@ class Settings(BaseModel):
     allow_addon_restart: bool = True
     allow_integration_reload: bool = True
     allow_automation_disable: bool = False
+    allow_script_stop: bool = True
     loop_monitor_enabled: bool = True
     loop_window_minutes: int = 5
     loop_toggle_threshold: int = 8
     loop_automation_threshold: int = 6
     seen_ttl_hours: int = 6
-    max_actions_per_cycle: int = 3
+    max_actions_per_cycle: int = 10
     ignored_patterns: list[str] = Field(default_factory=list)
     email_enabled: bool = False
     smtp_host: str = "smtp.gmail.com"
@@ -91,12 +92,13 @@ def load_settings() -> Settings:
         allow_addon_restart=_bool_value(opts.get("allow_addon_restart"), _bool_env("ALLOW_ADDON_RESTART", True)),
         allow_integration_reload=_bool_value(opts.get("allow_integration_reload"), _bool_env("ALLOW_INTEGRATION_RELOAD", True)),
         allow_automation_disable=_bool_value(opts.get("allow_automation_disable"), _bool_env("ALLOW_AUTOMATION_DISABLE", False)),
+        allow_script_stop=_bool_value(opts.get("allow_script_stop"), _bool_env("ALLOW_SCRIPT_STOP", True)),
         loop_monitor_enabled=_bool_value(opts.get("loop_monitor_enabled"), _bool_env("LOOP_MONITOR_ENABLED", True)),
         loop_window_minutes=int(opts.get("loop_window_minutes") or os.getenv("LOOP_WINDOW_MINUTES", "5")),
         loop_toggle_threshold=int(opts.get("loop_toggle_threshold") or os.getenv("LOOP_TOGGLE_THRESHOLD", "8")),
         loop_automation_threshold=int(opts.get("loop_automation_threshold") or os.getenv("LOOP_AUTOMATION_THRESHOLD", "6")),
         seen_ttl_hours=int(opts.get("seen_ttl_hours") or os.getenv("SEEN_TTL_HOURS", "6")),
-        max_actions_per_cycle=int(opts.get("max_actions_per_cycle") or os.getenv("MAX_ACTIONS_PER_CYCLE", "3")),
+        max_actions_per_cycle=int(opts.get("max_actions_per_cycle") or os.getenv("MAX_ACTIONS_PER_CYCLE", "10")),
         ignored_patterns=list(opts.get("ignored_patterns") or []),
         email_enabled=_bool_value(opts.get("email_enabled"), _bool_env("EMAIL_ENABLED", False)),
         smtp_host=opts.get("smtp_host") or os.getenv("SMTP_HOST", "smtp.gmail.com"),

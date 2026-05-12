@@ -55,6 +55,14 @@ CAPABILITIES = [
         "improvement_hint": "Collegare meglio dispositivo oscillante e automazione responsabile usando context_id e trace.",
     },
     {
+        "kind": "stop_script",
+        "title": "Stop script rimasto in esecuzione",
+        "triggers": ["script ... Already running"],
+        "action": "Chiama script.turn_off sullo script che risulta ancora running.",
+        "safety": "Consentito solo se allow_script_stop=true. In dry-run viene solo simulato.",
+        "improvement_hint": "Suggerire anche mode restart/queued quando lo stesso script viene richiamato spesso.",
+    },
+    {
         "kind": "notify_only",
         "title": "Solo notifica",
         "triggers": ["errore non riconosciuto"],
@@ -159,6 +167,108 @@ def decide_actions(issue: LogIssue, settings: Settings) -> list[HealingAction]:
             allowed=True,
         ))
 
+    if "already running" in text and "homeassistant.components.script." in text:
+        script_entity = _script_entity_from_source(issue.source)
+        if script_entity:
+            actions.append(HealingAction(
+                kind="stop_script",
+                title=f"Ferma {script_entity}",
+                reason="Lo script risulta gia' in esecuzione e sta rifiutando nuove chiamate. Lo stop sblocca lo stato running; poi conviene valutare mode restart o queued.",
+                allowed=settings.allow_script_stop,
+                payload={"entity_id": script_entity},
+            ))
+
+    if "failed to setup triggers and has been disabled" in text and ("unknown entity" in text or "unknown entity registry entry" in text):
+        alias = _extract_automation_alias(text)
+        automation_entity = _automation_entity_from_alias(alias) if alias else None
+        actions.append(HealingAction(
+            kind="disable_automation" if automation_entity else "notify_only",
+            title=f"Conferma stop automazione rotta{f' {automation_entity}' if automation_entity else ''}",
+            reason=(
+                f"L'automazione {alias or 'indicata nel log'} ha trigger verso entita' inesistenti ed e' stata disabilitata da Home Assistant. "
+                "La correzione strutturale e' sostituire il trigger con una entity_id valida o rimuovere l'automazione."
+            ),
+            allowed=settings.allow_automation_disable if automation_entity else True,
+            payload={"entity_id": automation_entity} if automation_entity else {},
+        ))
+
+    if "does not support action" in text:
+        entity_id, service = _extract_unsupported_service(text)
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Servizio non supportato dall'entita'",
+            reason=(
+                f"{entity_id or 'Una entita'} non supporta {service or 'il servizio richiesto'}. "
+                "Aggiorna automazioni/script sostituendo il servizio con uno supportato o controllando supported_features."
+            ),
+            allowed=True,
+            payload={"entity_id": entity_id, "service": service},
+        ))
+
+    if "error from stream worker" in text and "stream ended" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Stream camera terminato",
+            reason="Lo stream RTSP/camera e' terminato senza pacchetti. Verificare stabilita' camera/rete o configurazione go2rtc; non c'e' una remediation HA sicura senza sapere quale camera riavviare.",
+            allowed=True,
+        ))
+
+    if "go2rtc" in text and ("i/o timeout" in text or "error=eof" in text or "rtsp://" in text):
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Timeout go2rtc/RTSP",
+            reason="go2rtc non riceve dati dal flusso RTSP. Controllare camera, credenziali, rete e profilo stream; eventuale restart add-on richiede mapping dello slug.",
+            allowed=True,
+        ))
+
+    if "pychromecast.socket_client" in text or "async_upnp_client" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Dispositivo media non raggiungibile",
+            reason="Chromecast/DLNA/UPnP non risponde o resetta la connessione. Verificare IP fisso, standby del TV e connettivita' LAN.",
+            allowed=True,
+        ))
+
+    if "ezviz" in text and ("invalid response from api" in text or "does not support action" in text):
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="EZVIZ API o servizio non valido",
+            reason="EZVIZ restituisce risposta API non valida oppure l'entita' non supporta il servizio richiesto. Serve verificare credenziali/rate limit e correggere automazioni che chiamano servizi non supportati.",
+            allowed=True,
+        ))
+
+    if "upload failed for synology_dsm" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Backup Synology fallito",
+            reason="Il caricamento backup su Synology DSM e' fallito. Verificare spazio, permessi, connessione DSM e credenziali; non viene cancellato nulla automaticamente.",
+            allowed=True,
+        ))
+
+    if "failed to to call /store/repositories" in text and "could not read username" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Repository add-on Git non accessibile",
+            reason="Supervisor non riesce a clonare il repository add-on: sembra privato, errato o non accessibile senza credenziali. Rimuovere il vecchio repository e usare quello pubblico corretto.",
+            allowed=True,
+        ))
+
+    if "no update available for app" in text and "ha_mcp_self_healer" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Update add-on richiesto ma non disponibile",
+            reason="Supervisor segnala che non esiste un update disponibile per HA MCP Self Healer. Aggiornare/rebuildare lo store add-on prima di riprovare.",
+            allowed=True,
+        ))
+
+    if "does not generate unique ids" in text and "already exists" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Unique ID duplicato",
+            reason="Home Assistant sta ignorando una entita' duplicata per unique_id gia' esistente. Se persiste dopo reload/restart, va rimossa o rinominata la definizione duplicata.",
+            allowed=True,
+        ))
+
     if "invalid config" in text or "configuration.yaml" in text:
         actions.append(HealingAction(
             kind="reload_core_config",
@@ -232,3 +342,29 @@ def _extract_missing_entity(text: str) -> str | None:
 def _extract_referenced_entity(text: str) -> str | None:
     match = re.search(r"referenced entities\s+([a-z0-9_]+\.[a-z0-9_]+)", text)
     return match.group(1) if match else None
+
+
+def _script_entity_from_source(source: str) -> str | None:
+    prefix = "homeassistant.components.script."
+    if not source.startswith(prefix):
+        return None
+    object_id = source.removeprefix(prefix).strip()
+    return f"script.{object_id}" if object_id else None
+
+
+def _extract_automation_alias(text: str) -> str | None:
+    match = re.search(r"automation with alias ['\"]([^'\"]+)['\"] failed to setup", text)
+    return match.group(1).strip() if match else None
+
+
+def _automation_entity_from_alias(alias: str) -> str:
+    object_id = re.sub(r"[^a-z0-9_]+", "_", alias.lower().strip())
+    object_id = re.sub(r"_+", "_", object_id).strip("_")
+    return f"automation.{object_id}"
+
+
+def _extract_unsupported_service(text: str) -> tuple[str | None, str | None]:
+    match = re.search(r"entity\s+([a-z0-9_]+\.[a-z0-9_]+)\s+does not support action\s+([a-z0-9_]+\.[a-z0-9_]+)", text)
+    if match:
+        return match.group(1), match.group(2)
+    return None, None

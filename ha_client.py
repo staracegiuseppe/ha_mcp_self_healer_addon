@@ -133,6 +133,9 @@ class HomeAssistantClient:
     def turn_off_automation(self, entity_id: str) -> Any:
         return self.call_service("automation", "turn_off", {"entity_id": entity_id, "stop_actions": True})
 
+    def turn_off_script(self, entity_id: str) -> Any:
+        return self.call_service("script", "turn_off", {"entity_id": entity_id})
+
     def logbook_recent(self, minutes: int) -> list[dict[str, Any]]:
         end = datetime.now(timezone.utc)
         start = end - timedelta(minutes=minutes)

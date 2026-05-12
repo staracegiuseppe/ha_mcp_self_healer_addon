@@ -17,7 +17,7 @@ def _fingerprint(source: str, message: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
 
 
-def parse_error_log(raw_log: str, ignored_patterns: list[str] | None = None, limit: int = 20) -> list[LogIssue]:
+def parse_error_log(raw_log: str, ignored_patterns: list[str] | None = None, limit: int = 50) -> list[LogIssue]:
     ignored_patterns = ignored_patterns or []
     issues: list[LogIssue] = []
     current: dict[str, str] | None = None

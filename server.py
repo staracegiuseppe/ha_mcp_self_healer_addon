@@ -29,7 +29,7 @@ async def lifespan(_app: FastAPI):
         agent.stop()
 
 
-app = FastAPI(title="Home Assistant MCP Self Healer", version="0.2.2", lifespan=lifespan)
+app = FastAPI(title="Home Assistant MCP Self Healer", version="0.2.3", lifespan=lifespan)
 
 
 def _page(title: str, body: str) -> str:

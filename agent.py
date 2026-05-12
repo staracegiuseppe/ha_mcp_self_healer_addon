@@ -153,6 +153,8 @@ class SelfHealingAgent:
                 response = self.ha.restart_addon(slug)
             elif action.kind == "disable_automation":
                 response = self.ha.turn_off_automation(action.payload["entity_id"])
+            elif action.kind == "stop_script":
+                response = self.ha.turn_off_script(action.payload["entity_id"])
             elif action.kind == "wait_and_recheck":
                 time.sleep(int(action.payload.get("seconds", 30)))
                 response = {"waited": action.payload.get("seconds", 30)}
