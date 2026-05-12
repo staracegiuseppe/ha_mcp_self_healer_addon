@@ -42,6 +42,7 @@ class Settings(BaseModel):
     loop_window_minutes: int = 5
     loop_toggle_threshold: int = 8
     loop_automation_threshold: int = 6
+    seen_ttl_hours: int = 6
     max_actions_per_cycle: int = 3
     ignored_patterns: list[str] = Field(default_factory=list)
     email_enabled: bool = False
@@ -94,6 +95,7 @@ def load_settings() -> Settings:
         loop_window_minutes=int(opts.get("loop_window_minutes") or os.getenv("LOOP_WINDOW_MINUTES", "5")),
         loop_toggle_threshold=int(opts.get("loop_toggle_threshold") or os.getenv("LOOP_TOGGLE_THRESHOLD", "8")),
         loop_automation_threshold=int(opts.get("loop_automation_threshold") or os.getenv("LOOP_AUTOMATION_THRESHOLD", "6")),
+        seen_ttl_hours=int(opts.get("seen_ttl_hours") or os.getenv("SEEN_TTL_HOURS", "6")),
         max_actions_per_cycle=int(opts.get("max_actions_per_cycle") or os.getenv("MAX_ACTIONS_PER_CYCLE", "3")),
         ignored_patterns=list(opts.get("ignored_patterns") or []),
         email_enabled=_bool_value(opts.get("email_enabled"), _bool_env("EMAIL_ENABLED", False)),

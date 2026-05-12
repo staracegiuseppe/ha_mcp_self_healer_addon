@@ -109,6 +109,56 @@ def decide_actions(issue: LogIssue, settings: Settings) -> list[HealingAction]:
             allowed=settings.allow_homeassistant_restart,
         ))
 
+    if "emulated_hue" in text and "entity not found" in text:
+        missing_entity = _extract_missing_entity(text)
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Pulizia discovery Emulated Hue",
+            reason=(
+                f"Il client Hue/Alexa sta ancora chiamando {missing_entity or 'una vecchia entita'} non piu' presente in Home Assistant. "
+                "Rimuovi quel dispositivo dal client vocale/app Hue compatibile e rifai la discovery; non esiste una correzione REST sicura su una entita' gia' assente."
+            ),
+            allowed=True,
+            payload={"entity_id": missing_entity} if missing_entity else {},
+        ))
+
+    if "referenced entities" in text and ("missing" in text or "not currently available" in text):
+        missing_entity = _extract_referenced_entity(text)
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Entita' referenziata mancante",
+            reason=(
+                f"Una automazione/script/dashboard sta usando {missing_entity or 'una entita'} non disponibile. "
+                "Aggiungi una guard condition, correggi il riferimento o usa continue_on_error se l'azione non deve bloccare la sequenza."
+            ),
+            allowed=True,
+            payload={"entity_id": missing_entity} if missing_entity else {},
+        ))
+
+    if "no update available" in text and "update.ha_mcp_self_healer_update" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Update add-on non disponibile",
+            reason="Home Assistant ha provato a installare update.ha_mcp_self_healer_update ma non c'era nessun update disponibile. Serve aggiornare lo store/rebuildare l'add-on, non chiamare update.install.",
+            allowed=True,
+        ))
+
+    if "installing a specific version is not supported" in text and "update.ha_mcp_self_healer_update" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Update add-on con versione specifica non supportato",
+            reason="L'entita' update dell'add-on non supporta installazione di versioni specifiche. Usare update normale dopo refresh dello store o rebuild manuale.",
+            allowed=True,
+        ))
+
+    if "invalidstateerror" in text and ("async_remove" in text or "async_reset" in text):
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="InvalidStateError core/entity platform",
+            reason="Traceback orfano rilevato durante rimozione/reset entita'. E' spesso un bug transitorio di HA o integrazione; se ricorre, serve identificare l'integrazione immediatamente precedente nei log.",
+            allowed=True,
+        ))
+
     if "invalid config" in text or "configuration.yaml" in text:
         actions.append(HealingAction(
             kind="reload_core_config",
@@ -171,4 +221,14 @@ def _extract_entry_id(text: str) -> str | None:
 
 def _extract_addon_slug(text: str) -> str | None:
     match = re.search(r"addon[_ /-]+([a-z0-9_]+)", text)
+    return match.group(1) if match else None
+
+
+def _extract_missing_entity(text: str) -> str | None:
+    match = re.search(r"entity not found:\s*([a-z0-9_]+\.[a-z0-9_]+)", text)
+    return match.group(1) if match else None
+
+
+def _extract_referenced_entity(text: str) -> str | None:
+    match = re.search(r"referenced entities\s+([a-z0-9_]+\.[a-z0-9_]+)", text)
     return match.group(1) if match else None

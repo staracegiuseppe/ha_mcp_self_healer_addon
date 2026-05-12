@@ -2,7 +2,7 @@ import json
 import logging
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -27,8 +27,9 @@ class SelfHealingAgent:
         self.last_report: HealingReport | None = None
         self._stop = threading.Event()
         state = self._load_state()
-        self._seen = set(state.get("seen", []))
+        self._seen = self._load_seen(state.get("seen", {}))
         self._history = list(state.get("history", []))[-50:]
+        self._prune_seen()
 
     def start_background(self) -> threading.Thread:
         thread = threading.Thread(target=self._loop, name="self-healer-loop", daemon=True)
@@ -47,6 +48,7 @@ class SelfHealingAgent:
             "loop_window_minutes": self.settings.loop_window_minutes,
             "loop_toggle_threshold": self.settings.loop_toggle_threshold,
             "loop_automation_threshold": self.settings.loop_automation_threshold,
+            "seen_ttl_hours": self.settings.seen_ttl_hours,
             "allow_automation_disable": self.settings.allow_automation_disable,
             "ha_url": self.settings.ha_url,
             "supervisor_url": self.settings.supervisor_url,
@@ -61,6 +63,7 @@ class SelfHealingAgent:
     def check_logs(self) -> list[LogIssue]:
         raw = self.ha.error_log()
         issues = parse_error_log(raw, self.settings.ignored_patterns)
+        self._prune_seen()
         return [issue for issue in issues if issue.fingerprint not in self._seen]
 
     def run_once(self, notify: bool = True) -> HealingReport:
@@ -73,7 +76,7 @@ class SelfHealingAgent:
                     if len(report.actions) >= self.settings.max_actions_per_cycle:
                         break
                     report.actions.append(self._execute_action(action))
-                self._seen.add(issue.fingerprint)
+                self._mark_seen(issue.fingerprint)
 
             for issue, actions in self.detect_live_loops():
                 if issue.fingerprint in self._seen:
@@ -83,7 +86,7 @@ class SelfHealingAgent:
                     if len(report.actions) >= self.settings.max_actions_per_cycle:
                         break
                     report.actions.append(self._execute_action(action))
-                self._seen.add(issue.fingerprint)
+                self._mark_seen(issue.fingerprint)
 
             report.summary = self._summary(report)
             report.finished_at = datetime.utcnow()
@@ -191,11 +194,34 @@ class SelfHealingAgent:
             pass
         return {"seen": [], "history": []}
 
+    def _load_seen(self, raw_seen: Any) -> dict[str, str]:
+        if isinstance(raw_seen, dict):
+            return {str(key): str(value) for key, value in raw_seen.items()}
+        if isinstance(raw_seen, list):
+            now = datetime.utcnow().isoformat()
+            return {str(item): now for item in raw_seen}
+        return {}
+
+    def _mark_seen(self, fingerprint: str) -> None:
+        self._seen[fingerprint] = datetime.utcnow().isoformat()
+
+    def _prune_seen(self) -> None:
+        cutoff = datetime.utcnow() - timedelta(hours=max(self.settings.seen_ttl_hours, 1))
+        kept: dict[str, str] = {}
+        for fingerprint, seen_at in self._seen.items():
+            try:
+                if datetime.fromisoformat(seen_at) >= cutoff:
+                    kept[fingerprint] = seen_at
+            except ValueError:
+                kept[fingerprint] = datetime.utcnow().isoformat()
+        self._seen = kept
+
     def _save_state(self) -> None:
         path = STATE_PATH if STATE_PATH.parent.exists() else LOCAL_STATE_PATH
         try:
+            self._prune_seen()
             path.write_text(
-                json.dumps({"seen": sorted(self._seen)[-500:], "history": self._history[-50:]}, indent=2),
+                json.dumps({"seen": dict(list(sorted(self._seen.items()))[-500:]), "history": self._history[-50:]}, indent=2),
                 encoding="utf-8",
             )
         except Exception:
