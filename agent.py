@@ -51,9 +51,11 @@ class SelfHealingAgent:
             "loop_automation_threshold": self.settings.loop_automation_threshold,
             "seen_ttl_hours": self.settings.seen_ttl_hours,
             "allow_automation_disable": self.settings.allow_automation_disable,
+            "allow_automation_restart": self.settings.allow_automation_restart,
             "allow_browser_mod_cleanup": self.settings.allow_browser_mod_cleanup,
             "allow_alexa_exposure_reload": self.settings.allow_alexa_exposure_reload,
             "allow_mqtt_state_patch": self.settings.allow_mqtt_state_patch,
+            "allow_update_install": self.settings.allow_update_install,
             "ha_url": self.settings.ha_url,
             "supervisor_url": self.settings.supervisor_url,
             "seen_errors": len(self._seen),
@@ -72,6 +74,7 @@ class SelfHealingAgent:
 
     def run_once(self, notify: bool = True) -> HealingReport:
         report = HealingReport()
+        executed_action_keys: set[str] = set()
         try:
             issues = self.check_logs()
             report.issues = issues
@@ -79,6 +82,10 @@ class SelfHealingAgent:
                 for action in decide_actions(issue, self.settings):
                     if len(report.actions) >= self.settings.max_actions_per_cycle:
                         break
+                    action_key = self._action_key(action)
+                    if action_key in executed_action_keys:
+                        continue
+                    executed_action_keys.add(action_key)
                     report.actions.append(self._execute_action(action))
                 self._mark_seen(issue.fingerprint)
 
@@ -89,6 +96,10 @@ class SelfHealingAgent:
                 for action in actions:
                     if len(report.actions) >= self.settings.max_actions_per_cycle:
                         break
+                    action_key = self._action_key(action)
+                    if action_key in executed_action_keys:
+                        continue
+                    executed_action_keys.add(action_key)
                     report.actions.append(self._execute_action(action))
                 self._mark_seen(issue.fingerprint)
 
@@ -159,6 +170,9 @@ class SelfHealingAgent:
                 response = self.ha.restart_addon(slug)
             elif action.kind == "disable_automation":
                 response = self.ha.turn_off_automation(action.payload["entity_id"])
+            elif action.kind == "restart_automation":
+                entity_id = action.payload["entity_id"]
+                response = {"turn_off": self.ha.turn_off_automation(entity_id), "turn_on": self.ha.turn_on_automation(entity_id)}
             elif action.kind == "stop_script":
                 response = self.ha.turn_off_script(action.payload["entity_id"])
             elif action.kind == "cleanup_browser_mod_obsolete":
@@ -167,6 +181,8 @@ class SelfHealingAgent:
                 response = self._reload_alexa_exposure(action.payload.get("entity_id"))
             elif action.kind == "patch_mqtt_bridge_update_state":
                 response = self._patch_mqtt_bridge_update_state(action.payload)
+            elif action.kind == "install_update_by_keyword":
+                response = self._install_update_by_keyword(action.payload["keyword"])
             elif action.kind == "wait_and_recheck":
                 time.sleep(int(action.payload.get("seconds", 30)))
                 response = {"waited": action.payload.get("seconds", 30)}
@@ -177,6 +193,11 @@ class SelfHealingAgent:
             return ActionResult(action=action, status="success", detail="Azione completata.", response=response)
         except Exception as exc:
             return ActionResult(action=action, status="failed", detail=str(exc))
+
+    def _action_key(self, action: HealingAction) -> str:
+        if action.kind in {"cleanup_browser_mod_obsolete", "reload_alexa_exposure"}:
+            return action.kind
+        return json.dumps({"kind": action.kind, "payload": action.payload}, sort_keys=True)
 
     def _reload_integration_by_domain(self, domain: str) -> dict[str, Any]:
         entries = self.ha.get_config_entries(domain)
@@ -254,6 +275,34 @@ class SelfHealingAgent:
             "publish": publish,
             "mqtt_reload": mqtt_reload,
             "detail": "Pubblicato payload MQTT arricchito con bridge_update e ricaricata integrazione MQTT.",
+        }
+
+    def _install_update_by_keyword(self, keyword: str) -> dict[str, Any]:
+        keyword_lower = keyword.lower()
+        matches = []
+        for state in self.ha.get_states():
+            entity_id = str(state.get("entity_id", ""))
+            attrs = state.get("attributes") or {}
+            haystack = " ".join([
+                entity_id,
+                str(attrs.get("friendly_name", "")),
+                str(attrs.get("title", "")),
+                str(attrs.get("installed_version", "")),
+                str(attrs.get("latest_version", "")),
+            ]).lower()
+            if entity_id.startswith("update.") and keyword_lower in haystack:
+                matches.append(state)
+
+        installable = [state for state in matches if state.get("state") == "on"]
+        results = []
+        for state in installable[:3]:
+            results.append({"entity_id": state["entity_id"], "response": self.ha.install_update(state["entity_id"])})
+        return {
+            "ok": bool(results),
+            "keyword": keyword,
+            "matched": [state.get("entity_id") for state in matches],
+            "installed": results,
+            "detail": "Installati update disponibili corrispondenti al keyword." if results else "Nessun update installabile trovato per il keyword.",
         }
 
     def _summary(self, report: HealingReport) -> str:

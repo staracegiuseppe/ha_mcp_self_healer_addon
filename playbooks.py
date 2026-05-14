@@ -40,6 +40,14 @@ CAPABILITIES = [
         "improvement_hint": "Correggere a monte il discovery template dell'entita' update per usare value_json.get('bridge_update', {}).",
     },
     {
+        "kind": "install_update_by_keyword",
+        "title": "Installa update integrazione custom",
+        "triggers": ["govee app version too low", "sonoff wrong domain will stop working"],
+        "action": "Cerca entita' update.* con keyword dell'integrazione e chiama update.install se lo stato e' on.",
+        "safety": "Consentito solo se allow_update_install=true. Installa solo update gia' proposti da Home Assistant.",
+        "improvement_hint": "Mappare con piu' precisione repository HACS e changelog prima dell'installazione.",
+    },
+    {
         "kind": "wait_and_recheck",
         "title": "Attesa e ricontrollo",
         "triggers": ["platform not ready", "will retry"],
@@ -78,6 +86,14 @@ CAPABILITIES = [
         "action": "Chiama automation.turn_off con stop_actions=true sull'automazione sospetta.",
         "safety": "Disabilitato di default: richiede allow_automation_disable=true. In dry-run viene solo simulato.",
         "improvement_hint": "Collegare meglio dispositivo oscillante e automazione responsabile usando context_id e trace.",
+    },
+    {
+        "kind": "restart_automation",
+        "title": "Riavvia automazione bloccata",
+        "triggers": ["automation already running"],
+        "action": "Chiama automation.turn_off con stop_actions=true e poi automation.turn_on.",
+        "safety": "Consentito solo se allow_automation_restart=true. Non lascia l'automazione disabilitata.",
+        "improvement_hint": "Valutare mode restart/queued per automazioni che restano spesso in running.",
     },
     {
         "kind": "stop_script",
@@ -176,6 +192,17 @@ def decide_actions(issue: LogIssue, settings: Settings) -> list[HealingAction]:
 
     if "emulated_hue" in text and "entity not found" in text:
         missing_entity = _extract_missing_entity(text)
+        if missing_entity and "browser_mod_" in missing_entity:
+            actions.append(HealingAction(
+                kind="cleanup_browser_mod_obsolete",
+                title="Pulizia Browser Mod obsoleti per Alexa",
+                reason=(
+                    f"Emulated Hue/Alexa sta chiamando il vecchio Browser Mod {missing_entity}. "
+                    "Pulisco le registrazioni Browser Mod obsolete prima di ricaricare l'esposizione."
+                ),
+                allowed=settings.allow_browser_mod_cleanup,
+                payload={"entity_id": missing_entity},
+            ))
         actions.append(HealingAction(
             kind="reload_alexa_exposure",
             title="Reload esposizione Alexa/Emulated Hue",
@@ -235,6 +262,74 @@ def decide_actions(issue: LogIssue, settings: Settings) -> list[HealingAction]:
             reason="Home Assistant ha provato a installare update.ha_mcp_self_healer_update ma non c'era nessun update disponibile. Serve aggiornare lo store/rebuildare l'add-on, non chiamare update.install.",
             allowed=True,
         ))
+
+    if "xiaomi tv" in text and "could not find" in text:
+        actions.append(HealingAction(
+            kind="reload_integration_by_domain",
+            title="Reload Xiaomi TV",
+            reason="Xiaomi TV non e' stato trovato all'IP configurato. Ricarico l'integrazione per riprovare discovery/connessione.",
+            allowed=settings.allow_integration_reload,
+            payload={"domain": "xiaomi_tv"},
+        ))
+
+    if "govee" in text and ("app version is too low" in text or "no token available" in text or "login failed" in text):
+        actions.append(HealingAction(
+            kind="install_update_by_keyword",
+            title="Aggiorna integrazione Govee",
+            reason="Govee rifiuta login per app version troppo bassa: provo a installare l'update HACS/integrazione se disponibile.",
+            allowed=settings.allow_update_install,
+            payload={"keyword": "govee"},
+        ))
+        actions.append(HealingAction(
+            kind="reload_integration_by_domain",
+            title="Reload Govee",
+            reason="Dopo il tentativo update, ricarico Govee per rigenerare token/sessione.",
+            allowed=settings.allow_integration_reload,
+            payload={"domain": "govee"},
+        ))
+
+    if "sonoff" in text and "sets an entity id with wrong domain" in text:
+        actions.append(HealingAction(
+            kind="install_update_by_keyword",
+            title="Aggiorna SonoffLAN",
+            reason="SonoffLAN sta creando entity_id con dominio errato; provo a installare update disponibile dell'integrazione.",
+            allowed=settings.allow_update_install,
+            payload={"keyword": "sonoff"},
+        ))
+        actions.append(HealingAction(
+            kind="reload_integration_by_domain",
+            title="Reload Sonoff",
+            reason="Ricarico Sonoff dopo il tentativo update per ricreare le entita' col dominio corretto se l'integrazione lo supporta.",
+            allowed=settings.allow_integration_reload,
+            payload={"domain": "sonoff"},
+        ))
+
+    if "generic platform for the camera integration does not support platform setup" in text:
+        actions.append(HealingAction(
+            kind="reload_core_config",
+            title="Reload configurazione camera",
+            reason="La configurazione camera usa platform generic in modo non piu' supportato. Ricarico core config; se persiste serve migrare YAML a camera: - platform: generic.",
+            allowed=settings.allow_integration_reload,
+        ))
+
+    if "platform automation does not generate unique ids" in text and "already exists" in text:
+        actions.append(HealingAction(
+            kind="reload_core_config",
+            title="Reload automazioni per unique_id duplicato",
+            reason="Home Assistant segnala automazione duplicata per unique_id gia' esistente. Ricarico core config; la correzione definitiva e' rimuovere/rigenerare il duplicato YAML.",
+            allowed=settings.allow_integration_reload,
+        ))
+
+    if "already running" in text and "homeassistant.components.automation." in text:
+        automation_entity = _automation_entity_from_source(issue.source)
+        if automation_entity:
+            actions.append(HealingAction(
+                kind="restart_automation",
+                title=f"Riavvia automazione bloccata {automation_entity}",
+                reason="L'automazione risulta gia' in esecuzione. La fermo con stop_actions=true e la riattivo subito.",
+                allowed=settings.allow_automation_restart,
+                payload={"entity_id": automation_entity},
+            ))
 
     if "installing a specific version is not supported" in text and "update.ha_mcp_self_healer_update" in text:
         actions.append(HealingAction(
@@ -538,6 +633,14 @@ def _script_entity_from_source(source: str) -> str | None:
         return None
     object_id = source.removeprefix(prefix).strip()
     return f"script.{object_id}" if object_id else None
+
+
+def _automation_entity_from_source(source: str) -> str | None:
+    prefix = "homeassistant.components.automation."
+    if not source.startswith(prefix):
+        return None
+    object_id = source.removeprefix(prefix).strip()
+    return f"automation.{object_id}" if object_id else None
 
 
 def _extract_automation_alias(text: str) -> str | None:

@@ -1,5 +1,5 @@
 name: HA MCP Self Healer
-version: "0.2.8"
+version: "0.2.9"
 slug: ha_mcp_self_healer
 description: MCP agent for Home Assistant log monitoring, conservative self-healing, and email reporting.
 url: https://github.com/staracegiuseppe/ha_mcp_self_healer_addon
@@ -31,10 +31,12 @@ options:
   allow_addon_restart: true
   allow_integration_reload: true
   allow_automation_disable: false
+  allow_automation_restart: true
   allow_script_stop: true
   allow_browser_mod_cleanup: true
   allow_alexa_exposure_reload: true
   allow_mqtt_state_patch: true
+  allow_update_install: true
   loop_monitor_enabled: true
   loop_window_minutes: 5
   loop_toggle_threshold: 8
@@ -68,10 +70,12 @@ schema:
   allow_addon_restart: bool
   allow_integration_reload: bool
   allow_automation_disable: bool
+  allow_automation_restart: bool
   allow_script_stop: bool
   allow_browser_mod_cleanup: bool
   allow_alexa_exposure_reload: bool
   allow_mqtt_state_patch: bool
+  allow_update_install: bool
   loop_monitor_enabled: bool
   loop_window_minutes: int
   loop_toggle_threshold: int

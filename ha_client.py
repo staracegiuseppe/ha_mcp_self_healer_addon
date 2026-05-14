@@ -127,6 +127,9 @@ class HomeAssistantClient:
     def mqtt_publish(self, topic: str, payload: str, retain: bool = True) -> Any:
         return self.call_service("mqtt", "publish", {"topic": topic, "payload": payload, "retain": retain})
 
+    def install_update(self, entity_id: str) -> Any:
+        return self.call_service("update", "install", {"entity_id": entity_id})
+
     def restart_homeassistant(self) -> Any:
         return self.call_service("homeassistant", "restart", {})
 
@@ -151,6 +154,9 @@ class HomeAssistantClient:
 
     def turn_off_automation(self, entity_id: str) -> Any:
         return self.call_service("automation", "turn_off", {"entity_id": entity_id, "stop_actions": True})
+
+    def turn_on_automation(self, entity_id: str) -> Any:
+        return self.call_service("automation", "turn_on", {"entity_id": entity_id})
 
     def turn_off_script(self, entity_id: str) -> Any:
         return self.call_service("script", "turn_off", {"entity_id": entity_id})
