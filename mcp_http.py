@@ -2,6 +2,8 @@ from typing import Any
 
 from agent import SelfHealingAgent
 
+APP_VERSION = "0.2.10"
+APP_AUTHOR = "Starace Giuseppe"
 
 TOOLS = [
     {
@@ -35,7 +37,7 @@ def handle_mcp(agent: SelfHealingAgent, request: dict[str, Any]) -> dict[str, An
             result = {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "ha-mcp-self-healer", "version": "0.1.0"},
+                "serverInfo": {"name": "ha-mcp-self-healer", "version": APP_VERSION, "author": APP_AUTHOR},
             }
         elif method == "tools/list":
             result = {"tools": TOOLS}

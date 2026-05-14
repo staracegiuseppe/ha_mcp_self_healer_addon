@@ -18,6 +18,9 @@ log = logging.getLogger(__name__)
 
 settings = load_settings()
 agent = SelfHealingAgent(settings)
+APP_VERSION = "0.2.10"
+APP_AUTHOR = "Starace Giuseppe"
+PAYPAL_DONATE_URL = "https://www.paypal.com/donate/?business=staracegiuseppe%40gmail.com&currency_code=EUR"
 
 
 @asynccontextmanager
@@ -29,7 +32,7 @@ async def lifespan(_app: FastAPI):
         agent.stop()
 
 
-app = FastAPI(title="Home Assistant MCP Self Healer", version="0.2.5", lifespan=lifespan)
+app = FastAPI(title="Home Assistant MCP Self Healer", version=APP_VERSION, lifespan=lifespan)
 
 
 def _page(title: str, body: str) -> str:
@@ -48,6 +51,7 @@ def _page(title: str, body: str) -> str:
           h2 {{ font-size: 18px; margin: 0 0 12px; }}
           p {{ line-height: 1.5; }}
           .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }}
+          .meta {{ display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }}
           .panel {{ background: white; border: 1px solid #d9dee7; border-radius: 8px; padding: 18px; margin-top: 16px; }}
           .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }}
           .metric {{ background: #ffffff; border: 1px solid #d9dee7; border-radius: 8px; padding: 14px; }}
@@ -63,6 +67,8 @@ def _page(title: str, body: str) -> str:
           pre {{ padding: 14px; overflow: auto; white-space: pre-wrap; }}
           a.button {{ display: inline-block; background: #1f6feb; color: white; padding: 10px 14px; border-radius: 6px; text-decoration: none; margin-right: 8px; margin-top: 6px; }}
           a.secondary {{ background: #4b5563; }}
+          a.donate {{ background: #0070ba; }}
+          footer {{ color: #687386; font-size: 13px; padding: 18px 0 4px; }}
           ul {{ padding-left: 20px; }}
           li {{ margin: 8px 0; }}
         </style>
@@ -70,6 +76,11 @@ def _page(title: str, body: str) -> str:
       <body>
         <main>
           {body}
+          <footer>
+            <span>Autore: {escape(APP_AUTHOR)}</span>
+            <span> · </span>
+            <a href="{escape(PAYPAL_DONATE_URL)}" target="_blank" rel="noopener">Donate PayPal: staracegiuseppe@gmail.com</a>
+          </footer>
         </main>
       </body>
     </html>
@@ -185,6 +196,11 @@ def index() -> str:
         <div>
           <h1>HA MCP Self Healer</h1>
           <p class="muted">Monitoraggio log, remediation conservativa e report email.</p>
+          <div class="meta">
+            <span class="badge ok">Autore: {escape(APP_AUTHOR)}</span>
+            <span class="badge warn">Versione {escape(APP_VERSION)}</span>
+            <a class="button donate" href="{escape(PAYPAL_DONATE_URL)}" target="_blank" rel="noopener">Donate PayPal</a>
+          </div>
         </div>
       </div>
       {_status_metrics(status)}

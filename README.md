@@ -2,6 +2,10 @@
 
 Add-on Home Assistant autonomo che espone un piccolo server MCP, legge i log di Home Assistant, individua errori ricorrenti, prova remediation conservative e invia una mail con diagnosi e interventi eseguiti.
 
+Autore: **Starace Giuseppe**
+
+Donate PayPal: [staracegiuseppe@gmail.com](https://www.paypal.com/donate/?business=staracegiuseppe%40gmail.com&currency_code=EUR)
+
 ## Cosa fa
 
 - Si collega a Home Assistant tramite REST API (`SUPERVISOR_TOKEN` negli add-on o Long-Lived Access Token).
