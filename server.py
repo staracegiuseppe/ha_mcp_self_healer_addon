@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 
 settings = load_settings()
 agent = SelfHealingAgent(settings)
-APP_VERSION = "0.2.11"
+APP_VERSION = "0.2.12"
 APP_AUTHOR = "Starace Giuseppe"
 PAYPAL_DONATE_URL = "https://www.paypal.com/donate/?business=staracegiuseppe%40gmail.com&currency_code=EUR"
 

@@ -48,6 +48,14 @@ CAPABILITIES = [
         "improvement_hint": "Mappare con piu' precisione repository HACS e changelog prima dell'installazione.",
     },
     {
+        "kind": "notify_only",
+        "title": "Update bloccato: host senza internet",
+        "triggers": ["AppManager.update blocked", "no host internet connection"],
+        "action": "Non forza update: segnala che va ripristinata connettivita' host/DNS/gateway prima di aggiornare.",
+        "safety": "Solo notifica. L'add-on non puo' riparare la rete host se il Supervisor blocca gli update.",
+        "improvement_hint": "Aggiungere diagnostica Supervisor/host health quando l'API espone connessione internet e DNS.",
+    },
+    {
         "kind": "wait_and_recheck",
         "title": "Attesa e ricontrollo",
         "triggers": ["platform not ready", "will retry"],
@@ -261,6 +269,25 @@ def decide_actions(issue: LogIssue, settings: Settings) -> list[HealingAction]:
             title="Update add-on non disponibile",
             reason="Home Assistant ha provato a installare update.ha_mcp_self_healer_update ma non c'era nessun update disponibile. Serve aggiornare lo store/rebuildare l'add-on, non chiamare update.install.",
             allowed=True,
+        ))
+
+    if "appmanager.update" in text and "no host internet connection" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Update bloccato: host senza internet",
+            reason=(
+                "Supervisor ha bloccato l'update perche' l'host Home Assistant non vede internet. "
+                "Ripristina DNS/gateway/rete host, poi aggiorna lo store add-on e rilancia l'update."
+            ),
+            allowed=True,
+            payload={
+                "checklist": [
+                    "Settings > System > Network: verifica gateway e DNS",
+                    "Settings > System > Repairs: controlla problemi di connettivita'",
+                    "Riavvia il router o correggi DNS se l'host non risolve GitHub",
+                    "Riavvia Supervisor/host solo dopo aver corretto la rete",
+                ]
+            },
         ))
 
     if "xiaomi tv" in text and "could not find" in text:

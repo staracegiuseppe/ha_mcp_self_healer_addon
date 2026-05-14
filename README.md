@@ -85,6 +85,26 @@ Per installatori, aziende e utenti con impianti complessi:
 
 Prezzi suggeriti e dettagli: [SUPPORT.md](SUPPORT.md)
 
+## Troubleshooting update add-on
+
+Se Home Assistant mostra:
+
+```text
+Error updating HA MCP Self Healer: 'AppManager.update' blocked from execution, no host internet connection
+```
+
+il problema non è il codice dell'add-on: il Supervisor sta bloccando l'update perché l'host Home Assistant non vede internet.
+
+Controlli consigliati:
+
+1. Apri **Settings > System > Network** e verifica gateway e DNS.
+2. Apri **Settings > System > Repairs** e controlla eventuali problemi di connettività.
+3. Verifica che Home Assistant possa raggiungere GitHub e Docker registry.
+4. Se usi DNS personalizzati, prova temporaneamente `1.1.1.1` o `8.8.8.8`.
+5. Dopo aver ripristinato la rete, fai refresh dello store add-on e rilancia l'update.
+
+La self-healer riconosce questo errore e lo segnala come problema rete/Supervisor, perché non può forzare un update quando il Supervisor lo blocca per assenza di internet host.
+
 ## Limiti di sicurezza
 
 Questa app non modifica file YAML arbitrari e non fa restart distruttivi senza che l'azione sia abilitata. È volutamente prudente: quando non riconosce un errore, lo segnala via mail invece di improvvisare.
