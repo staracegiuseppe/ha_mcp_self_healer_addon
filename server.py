@@ -18,9 +18,38 @@ log = logging.getLogger(__name__)
 
 settings = load_settings()
 agent = SelfHealingAgent(settings)
-APP_VERSION = "0.2.12"
+APP_VERSION = "0.2.13"
 APP_AUTHOR = "Starace Giuseppe"
 PAYPAL_DONATE_URL = "https://www.paypal.com/donate/?business=staracegiuseppe%40gmail.com&currency_code=EUR"
+
+COMPONENTS = {
+    "homeassistant_core": ("Home Assistant Core", "Core, configurazione, template, recorder e API."),
+    "supervisor_host": ("Supervisor e host", "Supervisor, add-on, rete host, update e backup."),
+    "mqtt_zigbee": ("MQTT e Zigbee", "Zigbee2MQTT, payload MQTT, coordinator e dispositivi unavailable."),
+    "automations": ("Automazioni", "Loop, trace, automazioni bloccate o riavviate."),
+    "browser_mod": ("Browser Mod", "Browser obsoleti, device fantasma e pannelli kiosk."),
+    "voice_assistants": ("Alexa / Emulated Hue", "Entita' esposte, discovery vocale e client Hue-compatible."),
+    "media_cast": ("Media / Cast", "Chromecast, TV, pychromecast e socket media."),
+    "cameras": ("Camera e stream", "Telecamere, stream, ffmpeg e snapshot."),
+    "network_devices": ("Dispositivi LAN", "REST sensor, Sonoff, Govee, Fully Kiosk e device HTTP."),
+    "updates": ("Aggiornamenti", "Entita' update, versioni e richieste di installazione."),
+    "self_healer": ("Self Healer", "Salute interna dell'add-on e dei playbook."),
+    "other": ("Altro", "Errori non ancora classificati."),
+}
+
+COMPONENT_RULES = [
+    ("self_healer", ("ha_mcp_self_healer", "self healer", "self-healer")),
+    ("browser_mod", ("browser_mod", "browser mod")),
+    ("voice_assistants", ("emulated_hue", "hue_api", "alexa", "google assistant")),
+    ("mqtt_zigbee", ("zigbee", "zha", "z2m", "mqtt", "bridge_update", "permit_join", "coordinator")),
+    ("automations", ("automation.", "automazione", "loop automazione", "script.")),
+    ("media_cast", ("pychromecast", "cast", "chromecast", "connection reset by peer")),
+    ("cameras", ("camera", "stream", "ffmpeg", "snapshot", "ezviz")),
+    ("network_devices", ("rest.data", "fully", "sonoff", "govee", "connect call failed", "device stopped responding")),
+    ("updates", ("update.", "no update available", "installing a specific version", "appmanager.update")),
+    ("supervisor_host", ("supervisor", "host internet", "hassio", "backup", "addon")),
+    ("homeassistant_core", ("homeassistant.helpers.template", "invalidstateerror", "configentry", "recorder", "yaml")),
+]
 
 
 @asynccontextmanager
@@ -61,6 +90,12 @@ def _page(title: str, body: str) -> str:
           .ok {{ background: #dff7e8; color: #126b35; }}
           .warn {{ background: #fff1cf; color: #7a4d00; }}
           .err {{ background: #ffe1df; color: #9b231e; }}
+          .neutral {{ background: #e8edf5; color: #334155; }}
+          .health-card {{ border-left: 5px solid #cbd5e1; }}
+          .health-card.health-ok {{ border-left-color: #23a455; }}
+          .health-card.health-warn {{ border-left-color: #d28a00; }}
+          .health-card.health-err {{ border-left-color: #d33b32; }}
+          .health-card.health-neutral {{ border-left-color: #94a3b8; }}
           .muted {{ color: #687386; }}
           code, pre {{ background: #eef1f6; border-radius: 6px; }}
           code {{ padding: 2px 5px; }}
@@ -104,6 +139,202 @@ def _status_metrics(status: dict) -> str:
       <div class="metric"><div class="label">HA URL</div><div class="value" style="font-size:14px">{escape(str(status.get("ha_url", "")))}</div></div>
       <div class="metric"><div class="label">Supervisor URL</div><div class="value" style="font-size:14px">{escape(str(status.get("supervisor_url", "")))}</div></div>
     </div>
+    """
+
+
+def _component_from_text(text: str) -> str:
+    lowered = text.lower()
+    for key, needles in COMPONENT_RULES:
+        if any(needle in lowered for needle in needles):
+            return key
+    return "other"
+
+
+def _clip(value: object, limit: int = 180) -> str:
+    text = str(value or "")
+    return text if len(text) <= limit else f"{text[: limit - 3]}..."
+
+
+def _empty_component(key: str) -> dict:
+    title, description = COMPONENTS.get(key, COMPONENTS["other"])
+    return {
+        "key": key,
+        "title": title,
+        "description": description,
+        "status": "ok",
+        "issues": 0,
+        "actions": 0,
+        "severity_counts": {"critical": 0, "error": 0, "warning": 0, "info": 0},
+        "action_counts": {"success": 0, "failed": 0, "dry_run": 0, "skipped": 0},
+        "latest_issue": None,
+        "latest_action": None,
+    }
+
+
+def _health_snapshot() -> dict:
+    status = agent.status()
+    reports = agent.history()
+    last_report = status.get("last_report")
+    if last_report:
+        reports = [last_report] + [report for report in reports if report != last_report]
+
+    components = {key: _empty_component(key) for key in COMPONENTS}
+    timeline = []
+    totals = {"issues": 0, "actions": 0, "success": 0, "failed": 0, "dry_run": 0, "skipped": 0}
+
+    for report in reports[:50]:
+        stamp = str(report.get("finished_at") or report.get("started_at") or "")
+        for issue in report.get("issues") or []:
+            text = " ".join(str(issue.get(field, "")) for field in ("source", "message", "traceback"))
+            key = _component_from_text(text)
+            component = components.setdefault(key, _empty_component(key))
+            severity = str(issue.get("severity") or "info").lower()
+            if severity not in component["severity_counts"]:
+                severity = "info"
+            component["issues"] += 1
+            component["severity_counts"][severity] += 1
+            component["latest_issue"] = component["latest_issue"] or {
+                "time": stamp,
+                "severity": severity,
+                "source": issue.get("source"),
+                "message": issue.get("message"),
+            }
+            totals["issues"] += 1
+            if len(timeline) < 12:
+                timeline.append({
+                    "time": stamp,
+                    "component": component["title"],
+                    "kind": "issue",
+                    "status": severity,
+                    "text": _clip(issue.get("message"), 220),
+                })
+
+        for result in report.get("actions") or []:
+            action = result.get("action") or {}
+            text = " ".join(str(action.get(field, "")) for field in ("kind", "title", "reason", "payload"))
+            key = _component_from_text(text)
+            component = components.setdefault(key, _empty_component(key))
+            action_status = str(result.get("status") or "skipped").lower()
+            if action_status not in component["action_counts"]:
+                action_status = "skipped"
+            component["actions"] += 1
+            component["action_counts"][action_status] += 1
+            component["latest_action"] = component["latest_action"] or {
+                "time": stamp,
+                "status": action_status,
+                "title": action.get("title"),
+                "detail": result.get("detail") or action.get("reason"),
+            }
+            totals["actions"] += 1
+            totals[action_status] = totals.get(action_status, 0) + 1
+            if len(timeline) < 12:
+                timeline.append({
+                    "time": stamp,
+                    "component": component["title"],
+                    "kind": "action",
+                    "status": action_status,
+                    "text": _clip(action.get("title") or result.get("detail"), 220),
+                })
+
+    for component in components.values():
+        if component["action_counts"]["failed"] or component["severity_counts"]["critical"] or component["severity_counts"]["error"]:
+            component["status"] = "err"
+        elif component["issues"] or component["action_counts"]["dry_run"] or component["action_counts"]["skipped"]:
+            component["status"] = "warn"
+        else:
+            component["status"] = "ok"
+
+    issue_components = [component for component in components.values() if component["issues"] or component["actions"]]
+    if totals["failed"] or any(component["status"] == "err" for component in components.values()):
+        overall_status = "err"
+        overall_label = "Attenzione"
+    elif totals["issues"] or totals["dry_run"] or totals["skipped"]:
+        overall_status = "warn"
+        overall_label = "Da osservare"
+    else:
+        overall_status = "ok"
+        overall_label = "Stabile"
+
+    enabled_fixes = [
+        {"title": "Auto-fix", "enabled": bool(status.get("auto_fix_enabled"))},
+        {"title": "Dry run", "enabled": bool(status.get("dry_run")), "inverse": True},
+        {"title": "Loop automazioni", "enabled": bool(status.get("loop_monitor_enabled"))},
+        {"title": "Riavvio automazioni", "enabled": bool(status.get("allow_automation_restart"))},
+        {"title": "Stop automazioni", "enabled": bool(status.get("allow_automation_disable"))},
+        {"title": "Browser Mod cleanup", "enabled": bool(status.get("allow_browser_mod_cleanup"))},
+        {"title": "Alexa exposure reload", "enabled": bool(status.get("allow_alexa_exposure_reload"))},
+        {"title": "MQTT state patch", "enabled": bool(status.get("allow_mqtt_state_patch"))},
+        {"title": "Update install", "enabled": bool(status.get("allow_update_install"))},
+    ]
+
+    return {
+        "overall": {"status": overall_status, "label": overall_label},
+        "totals": totals,
+        "agent": status,
+        "components": list(components.values()),
+        "active_components": issue_components,
+        "enabled_fixes": enabled_fixes,
+        "timeline": timeline,
+    }
+
+
+def _health_dashboard_html(snapshot: dict) -> str:
+    overall = snapshot["overall"]
+    totals = snapshot["totals"]
+    components = snapshot["components"]
+    enabled_fixes = snapshot["enabled_fixes"]
+    timeline = snapshot["timeline"]
+
+    summary_cards = f"""
+    <div class="grid">
+      <div class="metric health-card health-{escape(overall['status'])}"><div class="label">Salute generale</div><div class="value"><span class="badge {escape(overall['status'])}">{escape(overall['label'])}</span></div></div>
+      <div class="metric"><div class="label">Errori nello storico</div><div class="value">{escape(str(totals.get("issues", 0)))}</div></div>
+      <div class="metric"><div class="label">Fix riusciti</div><div class="value">{escape(str(totals.get("success", 0)))}</div></div>
+      <div class="metric"><div class="label">Fix falliti</div><div class="value">{escape(str(totals.get("failed", 0)))}</div></div>
+      <div class="metric"><div class="label">Azioni simulate/saltate</div><div class="value">{escape(str(totals.get("dry_run", 0) + totals.get("skipped", 0)))}</div></div>
+    </div>
+    """
+
+    fix_cards = "".join(
+        f"<div class='metric'><div class='label'>{escape(item['title'])}</div><div class='value'><span class='badge {'warn' if item.get('inverse') and item.get('enabled') else 'ok' if item.get('enabled') else 'neutral'}'>{escape('ON' if item.get('enabled') else 'OFF')}</span></div></div>"
+        for item in enabled_fixes
+    )
+
+    component_cards = "".join(
+        f"""
+        <div class="metric health-card health-{escape(component['status'])}">
+          <div class="label">{escape(component['description'])}</div>
+          <h2>{escape(component['title'])}</h2>
+          <p><span class="badge {escape(component['status'])}">{escape('OK' if component['status'] == 'ok' else 'ATTENZIONE' if component['status'] == 'warn' else 'ERRORE')}</span></p>
+          <p>Errori: <b>{escape(str(component['issues']))}</b> · Azioni: <b>{escape(str(component['actions']))}</b></p>
+          <p class="muted">{escape(_clip((component.get('latest_issue') or component.get('latest_action') or {}).get('message') or (component.get('latest_action') or {}).get('title') or 'Nessun evento recente.'))}</p>
+        </div>
+        """
+        for component in components
+    )
+
+    timeline_items = "".join(
+        f"<li><span class='badge {'ok' if item.get('status') == 'success' else 'err' if item.get('status') in ('error', 'critical', 'failed') else 'warn'}'>{escape(str(item.get('kind', '')).upper())}</span> <b>{escape(str(item.get('component', '')))}</b><br><span>{escape(str(item.get('text') or ''))}</span><br><span class='muted'>{escape(str(item.get('time') or ''))}</span></li>"
+        for item in timeline
+    ) or "<li class='muted'>Nessun evento ancora registrato.</li>"
+
+    return f"""
+    <section class="panel">
+      <h2>Quadro generale</h2>
+      {summary_cards}
+    </section>
+    <section class="panel">
+      <h2>Fix automatici abilitati</h2>
+      <div class="grid">{fix_cards}</div>
+    </section>
+    <section class="panel">
+      <h2>Salute componenti</h2>
+      <div class="grid">{component_cards}</div>
+    </section>
+    <section class="panel">
+      <h2>Ultimi eventi</h2>
+      <ul>{timeline_items}</ul>
+    </section>
     """
 
 
@@ -204,7 +435,7 @@ def index() -> str:
         </div>
       </div>
       {_status_metrics(status)}
-      <p><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="health">Stato agente</a><a class="button secondary" href="history">Storico</a><a class="button secondary" href="capabilities">Capacita'</a><a class="button donate" href="support">Supporto</a></p>
+      <p><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="dashboard">Plancia salute</a><a class="button secondary" href="health">Stato agente</a><a class="button secondary" href="history">Storico</a><a class="button secondary" href="capabilities">Capacita'</a><a class="button donate" href="support">Supporto</a></p>
       <section class="panel">
         <h2>Ultimo report</h2>
         <p>{escape(str(summary))}</p>
@@ -222,13 +453,39 @@ def index_double_slash() -> str:
     return index()
 
 
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard_page() -> str:
+    snapshot = _health_snapshot()
+    return _page("Plancia salute componenti", f"""
+      <h1>Plancia salute componenti</h1>
+      <p class="muted">Vista aggregata dello stato dell'add-on, dei componenti Home Assistant osservati, dei fix automatici e degli ultimi eventi.</p>
+      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="dashboard.json">JSON salute</a><a class="button secondary" href="history">Storico</a></p>
+      {_health_dashboard_html(snapshot)}
+    """)
+
+
+@app.get("/dashboard.json")
+def dashboard_json() -> dict:
+    return _health_snapshot()
+
+
+@app.get("//dashboard", response_class=HTMLResponse, include_in_schema=False)
+def dashboard_page_double_slash() -> str:
+    return dashboard_page()
+
+
+@app.get("//dashboard.json", include_in_schema=False)
+def dashboard_json_double_slash() -> dict:
+    return dashboard_json()
+
+
 @app.get("/health", response_class=HTMLResponse)
 def health_page() -> str:
     status = agent.status()
     raw = {"ok": True, "agent": status}
     return _page("Stato agente", f"""
       <h1>Stato agente</h1>
-      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="history">Storico</a><a class="button secondary" href="capabilities">Capacita'</a></p>
+      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="dashboard">Plancia salute</a><a class="button secondary" href="history">Storico</a><a class="button secondary" href="capabilities">Capacita'</a></p>
       {_status_metrics(status)}
       <section class="panel">
         <h2>Ultimo report</h2>
@@ -287,7 +544,7 @@ def capabilities_page() -> str:
     return _page("Capacita' autonome", f"""
       <h1>Capacita' autonome</h1>
       <p class="muted">Queste sono le remediation che l'app puo' decidere in autonomia in base ai log. Le azioni invasive restano bloccate dalle opzioni di sicurezza e dal dry-run.</p>
-      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="history">Storico</a></p>
+      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="dashboard">Plancia salute</a><a class="button secondary" href="history">Storico</a></p>
       {_capabilities_html()}
       <section class="panel">
         <h2>Knowledge base diagnostica</h2>
@@ -324,7 +581,7 @@ def history_page() -> str:
         )
     return _page("Storico interventi", f"""
       <h1>Storico interventi</h1>
-      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="capabilities">Capacita'</a></p>
+      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="dashboard">Plancia salute</a><a class="button secondary" href="capabilities">Capacita'</a></p>
       {content}
     """)
 
@@ -349,7 +606,7 @@ def run_once_get() -> str:
     report = agent.run_once(notify=True).model_dump(mode="json")
     return _page("Controllo completato", f"""
       <h1>Controllo completato</h1>
-      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="health">Stato agente</a><a class="button secondary" href="history">Storico</a><a class="button secondary" href="capabilities">Capacita'</a></p>
+      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button" href="dashboard">Plancia salute</a><a class="button secondary" href="health">Stato agente</a><a class="button secondary" href="history">Storico</a><a class="button secondary" href="capabilities">Capacita'</a></p>
       {_report_html(report)}
     """)
 

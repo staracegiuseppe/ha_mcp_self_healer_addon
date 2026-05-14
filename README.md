@@ -28,6 +28,7 @@ https://github.com/staracegiuseppe/ha_mcp_self_healer_addon
 - Controlla periodicamente i log (`/api/error_log`).
 - Classifica gli errori tramite playbook locali.
 - Esegue solo azioni consentite dalla configurazione.
+- Mostra una plancia salute componenti su `/dashboard`, con stato globale, componenti critici, fix automatici abilitati e ultimi eventi.
 - Crea un backup prima di azioni invasive, se richiesto.
 - Invia una mail con errore rilevato, decisione presa, risultato e prossimi passi.
 - Pulisce Browser Mod obsoleti, ricarica esposizione Alexa/Emulated Hue, patcha payload MQTT noti, riavvia automazioni bloccate e ricarica integrazioni quando il playbook lo consente.
