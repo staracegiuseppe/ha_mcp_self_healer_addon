@@ -53,6 +53,7 @@ class SelfHealingAgent:
             "allow_automation_disable": self.settings.allow_automation_disable,
             "allow_browser_mod_cleanup": self.settings.allow_browser_mod_cleanup,
             "allow_alexa_exposure_reload": self.settings.allow_alexa_exposure_reload,
+            "allow_mqtt_state_patch": self.settings.allow_mqtt_state_patch,
             "ha_url": self.settings.ha_url,
             "supervisor_url": self.settings.supervisor_url,
             "seen_errors": len(self._seen),
@@ -164,6 +165,8 @@ class SelfHealingAgent:
                 response = self._cleanup_browser_mod_obsolete()
             elif action.kind == "reload_alexa_exposure":
                 response = self._reload_alexa_exposure(action.payload.get("entity_id"))
+            elif action.kind == "patch_mqtt_bridge_update_state":
+                response = self._patch_mqtt_bridge_update_state(action.payload)
             elif action.kind == "wait_and_recheck":
                 time.sleep(int(action.payload.get("seconds", 30)))
                 response = {"waited": action.payload.get("seconds", 30)}
@@ -238,6 +241,19 @@ class SelfHealingAgent:
                 "Ricaricata esposizione Alexa/Home Assistant Cloud o Emulated Hue quando disponibile. "
                 "Se l'entita' non esiste piu', Alexa deve comunque dimenticare il vecchio dispositivo e rifare discovery."
             ),
+        }
+
+    def _patch_mqtt_bridge_update_state(self, payload: dict[str, Any]) -> dict[str, Any]:
+        topic = payload["topic"]
+        patched_payload = payload["patched_payload"]
+        publish = self.ha.mqtt_publish(topic, patched_payload, retain=True)
+        mqtt_reload = self._reload_integration_by_domain("mqtt")
+        return {
+            "ok": True,
+            "topic": topic,
+            "publish": publish,
+            "mqtt_reload": mqtt_reload,
+            "detail": "Pubblicato payload MQTT arricchito con bridge_update e ricaricata integrazione MQTT.",
         }
 
     def _summary(self, report: HealingReport) -> str:

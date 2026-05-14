@@ -46,6 +46,7 @@ class Settings(BaseModel):
     allow_script_stop: bool = True
     allow_browser_mod_cleanup: bool = True
     allow_alexa_exposure_reload: bool = True
+    allow_mqtt_state_patch: bool = True
     loop_monitor_enabled: bool = True
     loop_window_minutes: int = 5
     loop_toggle_threshold: int = 8
@@ -102,6 +103,7 @@ def load_settings() -> Settings:
         allow_script_stop=_bool_value(opts.get("allow_script_stop"), _bool_env("ALLOW_SCRIPT_STOP", True)),
         allow_browser_mod_cleanup=_bool_value(opts.get("allow_browser_mod_cleanup"), _bool_env("ALLOW_BROWSER_MOD_CLEANUP", True)),
         allow_alexa_exposure_reload=_bool_value(opts.get("allow_alexa_exposure_reload"), _bool_env("ALLOW_ALEXA_EXPOSURE_RELOAD", True)),
+        allow_mqtt_state_patch=_bool_value(opts.get("allow_mqtt_state_patch"), _bool_env("ALLOW_MQTT_STATE_PATCH", True)),
         loop_monitor_enabled=_bool_value(opts.get("loop_monitor_enabled"), _bool_env("LOOP_MONITOR_ENABLED", True)),
         loop_window_minutes=int(opts.get("loop_window_minutes") or os.getenv("LOOP_WINDOW_MINUTES", "5")),
         loop_toggle_threshold=int(opts.get("loop_toggle_threshold") or os.getenv("LOOP_TOGGLE_THRESHOLD", "8")),

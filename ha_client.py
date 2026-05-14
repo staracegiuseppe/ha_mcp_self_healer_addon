@@ -124,6 +124,9 @@ class HomeAssistantClient:
         payload = {"browser_id_exclude": browser_id_exclude}
         return self.call_service("browser_mod", "deregister_browser", payload)
 
+    def mqtt_publish(self, topic: str, payload: str, retain: bool = True) -> Any:
+        return self.call_service("mqtt", "publish", {"topic": topic, "payload": payload, "retain": retain})
+
     def restart_homeassistant(self) -> Any:
         return self.call_service("homeassistant", "restart", {})
 

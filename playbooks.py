@@ -1,3 +1,4 @@
+import json
 import re
 
 from config import Settings
@@ -29,6 +30,14 @@ CAPABILITIES = [
         "action": "Ricarica i config entry cloud/emulated_hue quando presenti e poi ricarica la configurazione core.",
         "safety": "Consentito solo se allow_alexa_exposure_reload=true. Non elimina dispositivi da Alexa: quello va fatto dal client se l'entita' e' stata rimossa.",
         "improvement_hint": "Aggiungere update automatico delle exposure quando Home Assistant espone un endpoint REST stabile per Alexa.",
+    },
+    {
+        "kind": "patch_mqtt_bridge_update_state",
+        "title": "Patch payload MQTT bridge_update mancante",
+        "triggers": ["mqtt.update unable to process payload", "bridge_update missing in value_template"],
+        "action": "Ripubblica sul topic state lo stesso JSON con bridge_update di fallback e ricarica MQTT.",
+        "safety": "Consentito solo se allow_mqtt_state_patch=true. Aggiunge solo la chiave bridge_update al payload JSON esistente.",
+        "improvement_hint": "Correggere a monte il discovery template dell'entita' update per usare value_json.get('bridge_update', {}).",
     },
     {
         "kind": "wait_and_recheck",
@@ -140,6 +149,30 @@ def decide_actions(issue: LogIssue, settings: Settings) -> list[HealingAction]:
             reason="Home Assistant non ha trovato una libreria Python richiesta. Un restart puo' ritentare l'installazione al boot.",
             allowed=settings.allow_homeassistant_restart,
         ))
+
+    if "bridge_update" in text and ("unable to process payload" in text or "template variable error" in text):
+        topic = _extract_mqtt_topic(issue.message)
+        raw_payload = _extract_mqtt_payload(issue.message)
+        patched_payload = _patch_bridge_update_payload(raw_payload)
+        if topic and patched_payload:
+            actions.append(HealingAction(
+                kind="patch_mqtt_bridge_update_state",
+                title="Patch MQTT bridge_update mancante",
+                reason=(
+                    f"Il topic {topic} pubblica uno stato senza bridge_update, ma il template update lo richiede. "
+                    "L'agent ripubblica lo stesso payload con bridge_update di fallback e ricarica MQTT."
+                ),
+                allowed=settings.allow_mqtt_state_patch,
+                payload={"topic": topic, "patched_payload": patched_payload},
+            ))
+        else:
+            actions.append(HealingAction(
+                kind="reload_integration_by_domain",
+                title="Reload MQTT dopo template bridge_update rotto",
+                reason="Rilevato template MQTT rotto su bridge_update, ma non riesco a ricostruire topic/payload in sicurezza. Ricarico MQTT.",
+                allowed=settings.allow_integration_reload,
+                payload={"domain": "mqtt"},
+            ))
 
     if "emulated_hue" in text and "entity not found" in text:
         missing_entity = _extract_missing_entity(text)
@@ -452,6 +485,36 @@ def _extract_entry_id(text: str) -> str | None:
         if match:
             return match.group(1)
     return None
+
+
+def _extract_mqtt_topic(message: str) -> str | None:
+    match = re.search(r"for topic\s+([^,\s]+)", message)
+    return match.group(1).strip("'\"") if match else None
+
+
+def _extract_mqtt_payload(message: str) -> str | None:
+    match = re.search(r"payload\s+'({.*?})'\s+for topic", message)
+    return match.group(1) if match else None
+
+
+def _patch_bridge_update_payload(raw_payload: str | None) -> str | None:
+    if not raw_payload:
+        return None
+    try:
+        payload = json.loads(raw_payload)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if isinstance(payload.get("bridge_update"), dict):
+        return json.dumps(payload, separators=(",", ":"))
+    payload["bridge_update"] = {
+        "installed_version": "unknown",
+        "latest_version": "unknown",
+        "state": "idle",
+        "progress": 0,
+    }
+    return json.dumps(payload, separators=(",", ":"))
 
 
 def _extract_addon_slug(text: str) -> str | None:
