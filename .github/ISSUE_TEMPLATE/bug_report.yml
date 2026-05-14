@@ -1,0 +1,39 @@
+name: Bug report
+description: Report a problem with HA MCP Self Healer
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve HA MCP Self Healer.
+        For priority support or custom playbooks, email staracegiuseppe@gmail.com.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What happened?
+    validations:
+      required: true
+  - type: input
+    id: addon_version
+    attributes:
+      label: Add-on version
+      placeholder: "0.2.10"
+    validations:
+      required: true
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      placeholder: "2026.x.x"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste the self-healer report or Home Assistant log lines.
+      render: text
+    validations:
+      required: true

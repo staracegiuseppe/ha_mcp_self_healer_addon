@@ -2,7 +2,7 @@ from typing import Any
 
 from agent import SelfHealingAgent
 
-APP_VERSION = "0.2.10"
+APP_VERSION = "0.2.11"
 APP_AUTHOR = "Starace Giuseppe"
 
 TOOLS = [

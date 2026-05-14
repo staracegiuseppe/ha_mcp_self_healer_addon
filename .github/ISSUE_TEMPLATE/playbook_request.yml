@@ -1,0 +1,34 @@
+name: Playbook request
+description: Request a new automatic fix
+title: "[Playbook]: "
+labels: ["playbook", "enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Request a new self-healing playbook. For private or urgent work, email staracegiuseppe@gmail.com.
+  - type: textarea
+    id: error
+    attributes:
+      label: Error pattern
+      description: Paste the exact Home Assistant error/warning lines.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected_fix
+    attributes:
+      label: Expected automatic fix
+      description: What should the add-on do safely?
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - Nice to have
+        - Blocks automation
+        - Breaks production / paid support requested
+    validations:
+      required: true

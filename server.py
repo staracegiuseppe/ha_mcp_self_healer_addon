@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 
 settings = load_settings()
 agent = SelfHealingAgent(settings)
-APP_VERSION = "0.2.10"
+APP_VERSION = "0.2.11"
 APP_AUTHOR = "Starace Giuseppe"
 PAYPAL_DONATE_URL = "https://www.paypal.com/donate/?business=staracegiuseppe%40gmail.com&currency_code=EUR"
 
@@ -204,7 +204,7 @@ def index() -> str:
         </div>
       </div>
       {_status_metrics(status)}
-      <p><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="health">Stato agente</a><a class="button secondary" href="history">Storico</a><a class="button secondary" href="capabilities">Capacita'</a></p>
+      <p><a class="button" href="run-once">Esegui controllo ora</a><a class="button secondary" href="health">Stato agente</a><a class="button secondary" href="history">Storico</a><a class="button secondary" href="capabilities">Capacita'</a><a class="button donate" href="support">Supporto</a></p>
       <section class="panel">
         <h2>Ultimo report</h2>
         <p>{escape(str(summary))}</p>
@@ -237,6 +237,32 @@ def health_page() -> str:
       <section class="panel">
         <h2>JSON tecnico</h2>
         <pre>{escape(json.dumps(raw, ensure_ascii=False, indent=2))}</pre>
+      </section>
+    """)
+
+
+@app.get("/support", response_class=HTMLResponse)
+def support_page() -> str:
+    return _page("Supporto HA MCP Self Healer", f"""
+      <h1>Supporto e sviluppo</h1>
+      <p><a class="button secondary" href="./">Torna alla dashboard</a><a class="button donate" href="{escape(PAYPAL_DONATE_URL)}" target="_blank" rel="noopener">Donate PayPal</a></p>
+      <section class="panel">
+        <h2>Autore</h2>
+        <p><b>{escape(APP_AUTHOR)}</b></p>
+        <p>Email: <a href="mailto:staracegiuseppe@gmail.com">staracegiuseppe@gmail.com</a></p>
+      </section>
+      <section class="panel">
+        <h2>Supporto professionale</h2>
+        <div class="grid">
+          <div class="metric"><div class="label">Quick fix review</div><div class="value">EUR 49</div><p>Revisione log e indicazione fix.</p></div>
+          <div class="metric"><div class="label">Sessione remota</div><div class="value">EUR 149</div><p>Diagnosi Home Assistant e configurazione self-healer.</p></div>
+          <div class="metric"><div class="label">Playbook custom</div><div class="value">da EUR 299</div><p>Nuove remediation per errori ricorrenti.</p></div>
+          <div class="metric"><div class="label">Piano managed</div><div class="value">da EUR 29/mese</div><p>Supporto reliability per impianti complessi.</p></div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>Per installatori</h2>
+        <p>HA MCP Self Healer puo' diventare un servizio di manutenzione per case, B&B, uffici e dashboard always-on.</p>
       </section>
     """)
 
