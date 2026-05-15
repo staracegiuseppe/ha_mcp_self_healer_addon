@@ -120,6 +120,14 @@ KNOWN_ISSUES = [
         "automation_level": "manual",
     },
     {
+        "category": "Template",
+        "title": "Template loop detected",
+        "patterns": ["template loop detected", "skipping template render"],
+        "diagnosis": "Un template sensor osserva un insieme troppo ampio di stati e viene innescato anche dai propri aggiornamenti.",
+        "safe_response": "Solo notifica: convertire il sensore in trigger-based template o restringere le entita' osservate.",
+        "automation_level": "manual",
+    },
+    {
         "category": "Luci e dispositivi",
         "title": "Toggle loop / stato luce non sincronizzato",
         "patterns": ["light.toggle", "toggle", "state not updated", "oscillation"],
@@ -224,6 +232,22 @@ KNOWN_ISSUES = [
         "automation_level": "manual",
     },
     {
+        "category": "Media e stream",
+        "title": "Google Cast in failed_unload",
+        "patterns": ["failed_unload", "cannot be unloaded", "operationnotallowed", "google cast"],
+        "diagnosis": "La config entry Cast e' bloccata in uno stato non scaricabile; i reload automatici falliscono con errore 500.",
+        "safe_response": "Solo notifica: serve restart Home Assistant o rimozione/riaggiunta manuale della config entry Cast.",
+        "automation_level": "manual",
+    },
+    {
+        "category": "Rete e connettivita'",
+        "title": "Broadlink non raggiungibile",
+        "patterns": ["broadlink", "network timeout", "no response received within"],
+        "diagnosis": "Un Broadlink RM non risponde sulla LAN, spesso per Wi-Fi instabile, IP cambiato o dispositivo spento.",
+        "safe_response": "Solo notifica: verificare alimentazione, IP fisso/DHCP reservation e qualita' Wi-Fi.",
+        "automation_level": "manual",
+    },
+    {
         "category": "Integrazioni cloud",
         "title": "EZVIZ API non valida",
         "patterns": ["ezviz", "invalid response from api"],
@@ -246,6 +270,14 @@ KNOWN_ISSUES = [
         "diagnosis": "Home Assistant non e' riuscito a caricare il backup su Synology DSM.",
         "safe_response": "Solo notifica: controllare spazio, permessi, rete e credenziali DSM.",
         "automation_level": "manual",
+    },
+    {
+        "category": "Duck DNS",
+        "title": "Duck DNS update fallito",
+        "patterns": ["duckdns", "unexpected error fetching duckdns", "update_failed", "connection_error"],
+        "diagnosis": "Duck DNS non aggiorna correttamente l'IP o ha un errore interno dell'add-on/integrazione.",
+        "safe_response": "Riavvio add-on Duck DNS se consentito; se persiste, verificare token, DNS e connettivita' esterna.",
+        "automation_level": "guarded",
     },
     {
         "category": "Add-on",

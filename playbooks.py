@@ -56,6 +56,22 @@ CAPABILITIES = [
         "improvement_hint": "Aggiungere diagnostica Supervisor/host health quando l'API espone connessione internet e DNS.",
     },
     {
+        "kind": "notify_only",
+        "title": "Cast in stato failed_unload",
+        "triggers": ["cast failed_unload", "cannot be unloaded", "OperationNotAllowed"],
+        "action": "Evita reload ripetuti e segnala che serve restart Home Assistant o rimozione/riaggiunta manuale della config entry.",
+        "safety": "Solo notifica: non forza restart completo per una integrazione media.",
+        "improvement_hint": "Aggiungere un'opzione dedicata per consentire restart HA quando una config entry resta in failed_unload.",
+    },
+    {
+        "kind": "restart_addon",
+        "title": "Restart Duck DNS",
+        "triggers": ["duckdns update_failed", "duckdns IndexError", "unexpected error fetching duckdns"],
+        "action": "Riavvia l'add-on core_duckdns quando Duck DNS va in errore ricorrente.",
+        "safety": "Consentito solo se allow_addon_restart=true.",
+        "improvement_hint": "Verificare anche DNS esterno e token DuckDNS quando l'errore persiste.",
+    },
+    {
         "kind": "wait_and_recheck",
         "title": "Attesa e ricontrollo",
         "triggers": ["platform not ready", "will retry"],
@@ -290,6 +306,26 @@ def decide_actions(issue: LogIssue, settings: Settings) -> list[HealingAction]:
             },
         ))
 
+    if "template loop detected" in text:
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Template loop rilevato",
+            reason=(
+                "Un template sensor si aggiorna leggendo l'intero oggetto states e finisce per reagire anche ai propri cambiamenti. "
+                "La correzione sicura e' convertirlo in trigger-based template sensor o restringere le entita' osservate; l'agent non modifica automaticamente template utente."
+            ),
+            allowed=True,
+        ))
+
+    if "duckdns" in text and ("unexpected error fetching duckdns" in text or "update_failed" in text or "connection_error" in text or "indexerror" in text):
+        actions.append(HealingAction(
+            kind="restart_addon",
+            title="Restart Duck DNS",
+            reason="Duck DNS e' in errore ricorrente. Riavvio l'add-on Duck DNS per forzare una nuova sessione/update.",
+            allowed=settings.allow_addon_restart,
+            payload={"slug": "core_duckdns"},
+        ))
+
     if "xiaomi tv" in text and "could not find" in text:
         actions.append(HealingAction(
             kind="reload_integration_by_domain",
@@ -428,6 +464,17 @@ def decide_actions(issue: LogIssue, settings: Settings) -> list[HealingAction]:
             allowed=True,
         ))
 
+    if "cast" in text and ("failed_unload" in text or "cannot be unloaded" in text or "operationnotallowed" in text):
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Cast in stato failed_unload",
+            reason=(
+                "Home Assistant dice che la config entry Google Cast non puo' essere scaricata, quindi reload_config_entry fallira' con 500. "
+                "Serve restart Home Assistant oppure rimozione/riaggiunta manuale della config entry se resta bloccata."
+            ),
+            allowed=True,
+        ))
+
     if "pychromecast.socket_client" in text or "async_upnp_client" in text:
         if "pychromecast.socket_client" in text:
             actions.append(HealingAction(
@@ -444,6 +491,14 @@ def decide_actions(issue: LogIssue, settings: Settings) -> list[HealingAction]:
                 reason="DLNA/UPnP non risponde o resetta la connessione. Verificare IP fisso, standby del TV e connettivita' LAN.",
                 allowed=True,
             ))
+
+    if "broadlink" in text and ("network timeout" in text or "no response received" in text or "error fetching" in text):
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Broadlink non raggiungibile",
+            reason="Un dispositivo Broadlink non risponde sulla LAN. Verificare alimentazione, IP fisso/DHCP reservation e qualita' Wi-Fi; non c'e' una correzione HA sicura via REST.",
+            allowed=True,
+        ))
 
     if "ezviz" in text and ("invalid response from api" in text or "does not support action" in text):
         actions.append(HealingAction(
