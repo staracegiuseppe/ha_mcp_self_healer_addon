@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 
 settings = load_settings()
 agent = SelfHealingAgent(settings)
-APP_VERSION = "0.2.13"
+APP_VERSION = "0.2.14"
 APP_AUTHOR = "Starace Giuseppe"
 PAYPAL_DONATE_URL = "https://www.paypal.com/donate/?business=staracegiuseppe%40gmail.com&currency_code=EUR"
 
@@ -522,6 +522,11 @@ def support_page() -> str:
         <p>HA MCP Self Healer puo' diventare un servizio di manutenzione per case, B&B, uffici e dashboard always-on.</p>
       </section>
     """)
+
+
+@app.get("//support", response_class=HTMLResponse, include_in_schema=False)
+def support_page_double_slash() -> str:
+    return support_page()
 
 
 @app.get("/health.json")
