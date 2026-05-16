@@ -57,6 +57,46 @@ CAPABILITIES = [
     },
     {
         "kind": "notify_only",
+        "title": "LocalTuya siren senza state_on",
+        "triggers": ["localtuya siren KeyError state_on", "Exception in _update_handler", "CONF_STATE_ON"],
+        "action": "Segnala la correzione configurativa: completare il mapping siren con state_on/state_off o ricreare l'entita' LocalTuya.",
+        "safety": "Solo notifica: non modifica config entry custom_components per evitare di rompere datapoint Tuya non confermati.",
+        "improvement_hint": "Aggiungere in futuro un inspector LocalTuya che legga la config entry e suggerisca i DP mancanti senza scriverli.",
+    },
+    {
+        "kind": "notify_only",
+        "title": "Device HTTP/Fully Kiosk non raggiungibile",
+        "triggers": ["fully_kiosk timeout", "rest.data connect call failed", "192.168.1.55:2323"],
+        "action": "Classifica il problema come raggiungibilita' LAN e suggerisce IP fisso, porta/API Fully e alimentazione tablet.",
+        "safety": "Solo notifica: non spegne o rimuove il dispositivo.",
+        "improvement_hint": "Associare IP a entita' e creare un controllo periodico con storico reachability.",
+    },
+    {
+        "kind": "notify_only",
+        "title": "Camera ONVIF non raggiungibile",
+        "triggers": ["onvif event_service timeout", "Cannot connect to host", "port 6688"],
+        "action": "Segnala camera o servizio ONVIF offline e consiglia verifica IP, porta eventi, alimentazione e integrazione camera.",
+        "safety": "Solo notifica: non rimuove camera o integrazione.",
+        "improvement_hint": "Mappare host:porta al device registry per proporre reload mirato della sola camera.",
+    },
+    {
+        "kind": "notify_only",
+        "title": "Blink/DNS cloud temporaneamente non raggiungibile",
+        "triggers": ["blinkpy", "Timeout while contacting DNS servers", "TokenRefreshFailed"],
+        "action": "Evita retry aggressivi e segnala controllo DNS/gateway o stato cloud Blink.",
+        "safety": "Solo notifica: non forza ri-autenticazione automatica.",
+        "improvement_hint": "Aggregare gli errori cloud/DNS in una diagnosi host unica quando piu' integrazioni falliscono insieme.",
+    },
+    {
+        "kind": "create_home_control_dashboard",
+        "title": "Crea plancia Home Control",
+        "triggers": ["richiesta dashboard tablet", "plancia casa", "governo tutta casa"],
+        "action": "Genera una dashboard Lovelace a sezioni con controlli casa, stanze, box, media, sicurezza e salute.",
+        "safety": "Crea una dashboard separata e non modifica la planimetria esistente.",
+        "improvement_hint": "Esporre un tool MCP dedicato che costruisca la plancia leggendo aree/entita' live e applicando un template responsivo.",
+    },
+    {
+        "kind": "notify_only",
         "title": "Cast in stato failed_unload",
         "triggers": ["cast failed_unload", "cannot be unloaded", "OperationNotAllowed"],
         "action": "Evita reload ripetuti e segnala che serve restart Home Assistant o rimozione/riaggiunta manuale della config entry.",
@@ -304,6 +344,52 @@ def decide_actions(issue: LogIssue, settings: Settings) -> list[HealingAction]:
                     "Riavvia Supervisor/host solo dopo aver corretto la rete",
                 ]
             },
+        ))
+
+    if "localtuya" in text and ("keyerror: 'state_on'" in text or "conf_state_on" in text):
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="LocalTuya siren senza state_on",
+            reason=(
+                "Una entita' siren LocalTuya riceve update ma la config non contiene state_on. "
+                "Correzione sicura: aprire l'integrazione LocalTuya, completare state_on/state_off per quella sirena o ricreare l'entita' con il DP corretto."
+            ),
+            allowed=True,
+        ))
+
+    if ("fully_kiosk" in text or "192.168.1.55:2323" in text) and (
+        "timeout" in text or "connect call failed" in text or "cannot connect" in text
+    ):
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Tablet/Fully Kiosk non raggiungibile",
+            reason=(
+                "Il device Fully Kiosk o il sensore REST su 192.168.1.55:2323 non risponde. "
+                "Verificare che il tablet sia acceso, l'API remota Fully sia abilitata, password/porta siano corrette e l'IP sia riservato sul DHCP."
+            ),
+            allowed=True,
+        ))
+
+    if "onvif" in text and ("event_service" in text or "connect call failed" in text or "timed out" in text):
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Camera ONVIF non raggiungibile",
+            reason=(
+                "Una camera ONVIF non risponde al servizio eventi. "
+                "Verificare alimentazione, IP fisso, porta ONVIF/eventi e, se l'errore persiste, ricaricare o ricreare la sola integrazione camera."
+            ),
+            allowed=True,
+        ))
+
+    if "blink" in text and ("dns" in text or "tokenrefreshfailed" in text or "endpoint" in text or "login endpoint failed" in text):
+        actions.append(HealingAction(
+            kind="notify_only",
+            title="Blink/DNS cloud non raggiungibile",
+            reason=(
+                "Blink sta fallendo su DNS/cloud o refresh token. Prima di ri-autenticare, verificare DNS/gateway dell'host e stato del servizio Blink; "
+                "se gli errori continuano solo su Blink, rifare la reauth dell'integrazione."
+            ),
+            allowed=True,
         ))
 
     if "template loop detected" in text:

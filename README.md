@@ -32,6 +32,8 @@ https://github.com/staracegiuseppe/ha_mcp_self_healer_addon
 - Crea un backup prima di azioni invasive, se richiesto.
 - Invia una mail con errore rilevato, decisione presa, risultato e prossimi passi.
 - Pulisce Browser Mod obsoleti, ricarica esposizione Alexa/Emulated Hue, patcha payload MQTT noti, riavvia automazioni bloccate e ricarica integrazioni quando il playbook lo consente.
+- Espone `ha_list_self_healer_capabilities` e `ha_home_control_dashboard_template` via MCP per descrivere capacita', metodo e template della plancia casa.
+- Classifica anche LocalTuya `state_on`, Fully Kiosk/REST offline, camera ONVIF non raggiungibile, Blink/DNS cloud e backup Synology.
 
 ## Perché usarlo
 

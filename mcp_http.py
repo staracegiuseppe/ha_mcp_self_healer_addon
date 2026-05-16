@@ -1,8 +1,10 @@
 from typing import Any
 
 from agent import SelfHealingAgent
+from dashboard_templates import home_control_dashboard_template
+from playbooks import list_capabilities
 
-APP_VERSION = "0.2.15"
+APP_VERSION = "0.2.16"
 APP_AUTHOR = "Starace Giuseppe"
 
 TOOLS = [
@@ -25,6 +27,16 @@ TOOLS = [
                 "notify": {"type": "boolean", "default": True},
             },
         },
+    },
+    {
+        "name": "ha_list_self_healer_capabilities",
+        "description": "Elenca le capacita' e i playbook di correzione disponibili nel plugin.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "ha_home_control_dashboard_template",
+        "description": "Restituisce metodo e template per creare una plancia Lovelace casa/tablet/cellulare senza modificare la planimetria esistente.",
+        "inputSchema": {"type": "object", "properties": {}},
     },
 ]
 
@@ -59,6 +71,10 @@ def _call_tool(agent: SelfHealingAgent, name: str, arguments: dict[str, Any]) ->
     elif name == "ha_run_self_healing":
         report = agent.run_once(notify=bool(arguments.get("notify", True)))
         data = report.model_dump(mode="json")
+    elif name == "ha_list_self_healer_capabilities":
+        data = {"capabilities": list_capabilities()}
+    elif name == "ha_home_control_dashboard_template":
+        data = home_control_dashboard_template()
     else:
         raise ValueError(f"Tool sconosciuto: {name}")
 
